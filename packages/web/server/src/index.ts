@@ -26,6 +26,7 @@ import { templatesRouter } from "./routes/templates.js";
 import { renderDemoRouter } from "./routes/render-demo.js";
 import { captureRouter } from "./routes/capture.js";
 import { renderRouter } from "./routes/render.js";
+import { discoverRouter } from "./routes/discover.js";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3002);
@@ -45,6 +46,7 @@ app.use("/api/templates", templatesRouter);
 app.use("/api/render-demo", renderDemoRouter);
 app.use("/api/capture", captureRouter);
 app.use("/api/render", renderRouter);
+app.use("/api/discover", discoverRouter);
 
 // In production, serve the Vite-built client. In dev, the Vite dev server
 // runs separately on its own port and proxies /api to here.

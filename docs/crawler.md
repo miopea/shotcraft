@@ -38,7 +38,31 @@ self-contained — fill in, click through, scroll down.
 
 ### 2. Screens
 
-A row per screen you want to capture. Edit the table inline:
+A card per screen you want to capture. Two ways to populate the list:
+
+#### Auto-discover
+
+Click **🔍 Discover routes**. The server crawls the target same-origin
+(BFS, depth 2, max 25 pages, 60s deadline) — running your configured
+login first if you set one. Discovered paths come back as a checklist
+with each page's `<title>`. Tick the ones you want and click **Add as
+screens** — they merge into the screens list (skipping any already
+present).
+
+This finds anything reachable via `<a href>` link-following. It does
+**not** find:
+
+- Routes only reached via button clicks / state changes (use a screen
+  with `actions`)
+- Modal / drawer states (not URLs at all — use `actions`)
+- Dynamic-id routes like `/budgets/[id]/edit` where you need a
+  specific record
+
+For those, fall back to manually adding screens.
+
+#### Manual
+
+Click **+ Add screen**, then edit inline:
 
 | Column   | Purpose                                             |
 | -------- | --------------------------------------------------- |
@@ -131,6 +155,12 @@ POST /api/render-demo
   One-shot full pipeline. Body: { url, caption, ..., auth? }.
   Used by the /demo page (single screen) — kept for OSS visitors who
   just want "paste a URL → see a render."
+
+POST /api/discover
+  Body: { url, maxDepth?, maxPages?, auth? }
+  BFS link-crawl from the start URL. Same-origin only. Defaults:
+  depth 2, max 25 pages. Hard caps: depth 4, max 60 pages.
+  Returns: { routes: [{ path, title, depth }, ...] }
 ```
 
 All three live behind the same `SHOTCRAFT_LIVE_DEMO=1` flag plus the

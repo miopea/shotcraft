@@ -839,5 +839,219 @@ async function withDeadline<T>(ms: number, p: Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Auto-discovery: BFS link-crawl from a start URL. Lets the Crawler page
+ * suggest a starting list of routes instead of forcing the operator to
+ * type every path. Hard-capped to keep the App Service worker honest:
+ * one browser, one page, sequential navigation, 60s deadline overall.
+ *
+ * Limitations the caller should know:
+ *   - Same-origin only by default — blind crawling foreign hosts is an
+ *     SSRF amplifier and almost never what the operator wants.
+ *   - Pure link extraction (`<a href>`). Routes only reachable via
+ *     button clicks / state changes / dynamic IDs won't be found —
+ *     those need explicit screen entries with actions.
+ */
+export interface DiscoverRequest {
+  url: string;
+  maxDepth?: number;
+  maxPages?: number;
+  auth?: RenderDemoAuth;
+}
+
+export interface DiscoveredRoute {
+  path: string;
+  title: string;
+  depth: number;
+}
+
+const DISCOVER_DEFAULTS = {
+  maxDepth: 2,
+  maxPages: 25,
+  perPageTimeoutMs: 12_000,
+} as const;
+const DISCOVER_HARD_CAPS = {
+  maxDepth: 4,
+  maxPages: 60,
+} as const;
+
+export async function discoverRoutes(
+  req: DiscoverRequest,
+): Promise<EngineResult<DiscoveredRoute[]>> {
+  if (!req || typeof req !== "object") {
+    return { ok: false, status: 400, error: "Request must be a JSON object." };
+  }
+  if (typeof req.url !== "string" || req.url.length === 0) {
+    return { ok: false, status: 400, error: "`url` is required." };
+  }
+  if (req.auth) {
+    const authError = validateAuth(req.auth);
+    if (authError) return authError;
+  }
+  const urlCheck = await validateUrl(req.url);
+  if (!urlCheck.ok) return urlCheck;
+
+  const maxDepth = clampInt(
+    req.maxDepth,
+    DISCOVER_DEFAULTS.maxDepth,
+    1,
+    DISCOVER_HARD_CAPS.maxDepth,
+  );
+  const maxPages = clampInt(
+    req.maxPages,
+    DISCOVER_DEFAULTS.maxPages,
+    1,
+    DISCOVER_HARD_CAPS.maxPages,
+  );
+
+  const job = inflight.then(() =>
+    withDeadline(
+      60_000,
+      runDiscover({
+        url: req.url,
+        maxDepth,
+        maxPages,
+        ...(req.auth ? { auth: req.auth } : {}),
+      }),
+    ),
+  );
+  inflight = job.catch(() => undefined);
+  try {
+    const value = await job;
+    return { ok: true, value };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 500,
+      error: `discover failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+interface RunDiscoverArgs {
+  url: string;
+  maxDepth: number;
+  maxPages: number;
+  auth?: RenderDemoAuth;
+}
+
+async function runDiscover(args: RunDiscoverArgs): Promise<DiscoveredRoute[]> {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    return await discoverWithBrowser(browser, args);
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+}
+
+async function discoverWithBrowser(
+  browser: Browser,
+  args: RunDiscoverArgs,
+): Promise<DiscoveredRoute[]> {
+  const start = new URL(args.url);
+  const origin = start.origin;
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 1,
+    locale: "en-US",
+    reducedMotion: "reduce",
+  });
+  try {
+    const page = await ctx.newPage();
+    if (args.auth) {
+      await runTargetAuth(page, args.url, args.auth);
+    }
+
+    const visited = new Set<string>();
+    const results: DiscoveredRoute[] = [];
+    const queue: Array<{ url: string; depth: number }> = [{ url: start.toString(), depth: 0 }];
+
+    while (queue.length > 0 && results.length < args.maxPages) {
+      const next = queue.shift();
+      if (!next) break;
+      const norm = normalizeUrl(next.url);
+      if (norm === null || visited.has(norm)) continue;
+      visited.add(norm);
+
+      try {
+        await page.goto(next.url, {
+          waitUntil: "domcontentloaded",
+          timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
+        });
+      } catch {
+        // Failed nav: don't enqueue children, but don't abort the whole crawl.
+        continue;
+      }
+
+      const title = await page.title().catch(() => "");
+      const path = pathForResult(new URL(next.url), origin);
+      results.push({ path, title: title.slice(0, 200), depth: next.depth });
+
+      if (next.depth >= args.maxDepth) continue;
+
+      // server tsconfig has no DOM lib — pass a string evaluator and
+      // narrow the unknown result.
+      const raw: unknown = await page
+        .evaluate(
+          "Array.from(document.querySelectorAll('a[href]')).map((a) => a.href).filter(Boolean)",
+        )
+        .catch(() => [] as unknown);
+      const hrefs: string[] = Array.isArray(raw)
+        ? raw.filter((x): x is string => typeof x === "string")
+        : [];
+      for (const href of hrefs) {
+        const child = parseSameOriginHref(href, origin);
+        if (!child) continue;
+        if (visited.has(normalizeUrl(child) ?? "")) continue;
+        queue.push({ url: child, depth: next.depth + 1 });
+      }
+    }
+    return results;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function parseSameOriginHref(href: string, origin: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(href);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  if (parsed.origin !== origin) return null;
+  parsed.hash = "";
+  return parsed.toString();
+}
+
+function normalizeUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    u.hash = "";
+    // Strip trailing slash from non-root paths so /about/ and /about dedupe.
+    if (u.pathname.length > 1 && u.pathname.endsWith("/")) {
+      u.pathname = u.pathname.slice(0, -1);
+    }
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function pathForResult(u: URL, origin: string): string {
+  if (u.origin !== origin) return u.toString();
+  const p = u.pathname + u.search;
+  return p.length === 0 ? "/" : p;
+}
+
+function clampInt(raw: unknown, fallback: number, min: number, max: number): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return fallback;
+  const n = Math.floor(raw);
+  if (n < min) return min;
+  if (n > max) return max;
+  return n;
+}
+
 // Re-exports for the route + tests.
 export type { Browser };

@@ -79,6 +79,18 @@ interface CaptureProgress {
   error?: string;
 }
 
+interface DiscoveredRoute {
+  path: string;
+  title: string;
+  depth: number;
+}
+
+type DiscoverState =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "error"; message: string }
+  | { status: "ready"; routes: ReadonlyArray<DiscoveredRoute>; selected: Set<string> };
+
 function rid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -105,6 +117,7 @@ export function Crawler() {
   const [renderTemplateIds, setRenderTemplateIds] = useState<Set<string>>(new Set(["readme-hero"]));
   const [renderingAll, setRenderingAll] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [discoverState, setDiscoverState] = useState<DiscoverState>({ status: "idle" });
 
   useEffect(() => {
     fetch("/api/health")
@@ -138,6 +151,88 @@ export function Crawler() {
         actions: [],
       },
     ]);
+  };
+
+  const runDiscover = async (): Promise<void> => {
+    setDiscoverState({ status: "running" });
+    try {
+      let authPayload: Record<string, unknown> | null = null;
+      try {
+        authPayload = buildAuthPayload();
+      } catch (err) {
+        throw err instanceof Error ? err : new Error(String(err));
+      }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token.trim().length > 0) headers.Authorization = `Bearer ${token.trim()}`;
+      const res = await fetch("/api/discover", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          url: target,
+          ...(authPayload ? { auth: authPayload } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { routes: DiscoveredRoute[] };
+      const existing = new Set(screens.map((s) => normalizeRoute(s.route)));
+      const selected = new Set<string>();
+      for (const r of data.routes) {
+        if (!existing.has(normalizeRoute(r.path))) selected.add(r.path);
+      }
+      setDiscoverState({ status: "ready", routes: data.routes, selected });
+    } catch (err) {
+      setDiscoverState({
+        status: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const toggleDiscoverPick = (path: string): void => {
+    setDiscoverState((prev) => {
+      if (prev.status !== "ready") return prev;
+      const next = new Set(prev.selected);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return { status: "ready", routes: prev.routes, selected: next };
+    });
+  };
+
+  const setDiscoverPickAll = (pick: boolean): void => {
+    setDiscoverState((prev) => {
+      if (prev.status !== "ready") return prev;
+      const next = new Set<string>();
+      if (pick) for (const r of prev.routes) next.add(r.path);
+      return { status: "ready", routes: prev.routes, selected: next };
+    });
+  };
+
+  const addSelectedDiscovered = (): void => {
+    if (discoverState.status !== "ready") return;
+    const picked = discoverState.routes.filter((r) => discoverState.selected.has(r.path));
+    if (picked.length === 0) return;
+    setScreens((prev) => {
+      const existing = new Set(prev.map((s) => normalizeRoute(s.route)));
+      const additions: ScreenInput[] = [];
+      for (const r of picked) {
+        const norm = normalizeRoute(r.path);
+        if (existing.has(norm)) continue;
+        existing.add(norm);
+        additions.push({
+          id: rid(),
+          route: r.path,
+          name: routeToScreenName(r.path, prev.length + additions.length + 1),
+          caption: r.title,
+          subtitle: "",
+          actions: [],
+        });
+      }
+      return [...prev, ...additions];
+    });
+    setDiscoverState({ status: "idle" });
   };
 
   const removeScreen = (id: string) => {
@@ -469,6 +564,15 @@ export function Crawler() {
           the actions list at the bottom of each card.
         </p>
 
+        <DiscoverPanel
+          state={discoverState}
+          onTogglePath={toggleDiscoverPick}
+          onSelectAll={() => setDiscoverPickAll(true)}
+          onSelectNone={() => setDiscoverPickAll(false)}
+          onAddSelected={addSelectedDiscovered}
+          onDismiss={() => setDiscoverState({ status: "idle" })}
+        />
+
         <div className="screen-cards">
           {screens.map((s) => {
             const status = progress[s.id]?.status ?? "queued";
@@ -559,9 +663,24 @@ export function Crawler() {
             );
           })}
         </div>
-        <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.75rem" }}>
+        <div
+          style={{
+            marginTop: "0.75rem",
+            display: "flex",
+            gap: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
           <button type="button" onClick={addScreen} disabled={isDisabled}>
             + Add screen
+          </button>
+          <button
+            type="button"
+            onClick={() => void runDiscover()}
+            disabled={isDisabled || discoverState.status === "running"}
+            title="Crawl the target site (with login if configured) and pick which routes to capture"
+          >
+            {discoverState.status === "running" ? "Discovering…" : "🔍 Discover routes"}
           </button>
           <button
             type="button"
@@ -1069,6 +1188,116 @@ function ActionFields({ action, update, disabled }: ActionFieldsProps) {
     );
   }
   return null;
+}
+
+interface DiscoverPanelProps {
+  state: DiscoverState;
+  onTogglePath: (path: string) => void;
+  onSelectAll: () => void;
+  onSelectNone: () => void;
+  onAddSelected: () => void;
+  onDismiss: () => void;
+}
+
+function DiscoverPanel({
+  state,
+  onTogglePath,
+  onSelectAll,
+  onSelectNone,
+  onAddSelected,
+  onDismiss,
+}: DiscoverPanelProps) {
+  if (state.status === "idle") return null;
+  if (state.status === "running") {
+    return (
+      <div className="discover-panel discover-panel-running" role="status">
+        <span className="discover-spinner" aria-hidden="true" />
+        Crawling… (one page at a time, 60s budget)
+      </div>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div className="discover-panel discover-panel-error" role="alert">
+        <strong>Discover failed:</strong> {state.message}
+        <button type="button" className="discover-dismiss" onClick={onDismiss} aria-label="Dismiss">
+          ✕
+        </button>
+      </div>
+    );
+  }
+  const total = state.routes.length;
+  const picked = state.selected.size;
+  return (
+    <div className="discover-panel discover-panel-ready">
+      <header className="discover-panel-header">
+        <strong>
+          Discovered {total} route{total === 1 ? "" : "s"}
+        </strong>
+        <span className="discover-panel-meta">{picked} selected</span>
+        <div className="discover-panel-tools">
+          <button type="button" onClick={onSelectAll}>
+            All
+          </button>
+          <button type="button" onClick={onSelectNone}>
+            None
+          </button>
+          <button
+            type="button"
+            className="discover-dismiss"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      </header>
+      <ul className="discover-list">
+        {state.routes.map((r) => (
+          <li key={r.path}>
+            <label className="discover-row">
+              <input
+                type="checkbox"
+                checked={state.selected.has(r.path)}
+                onChange={() => onTogglePath(r.path)}
+              />
+              <span className="discover-path">{r.path}</span>
+              {r.title && <span className="discover-title">{r.title}</span>}
+              <span className="discover-depth">d{r.depth}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="discover-panel-footer">
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={onAddSelected}
+          disabled={picked === 0}
+        >
+          Add {picked} as screen{picked === 1 ? "" : "s"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function normalizeRoute(r: string): string {
+  let s = r.trim();
+  if (!s.startsWith("/")) s = "/" + s;
+  if (s.length > 1 && s.endsWith("/")) s = s.slice(0, -1);
+  return s.toLowerCase();
+}
+
+function routeToScreenName(path: string, idx: number): string {
+  const cleaned = path
+    .split("?")[0]!
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  const slug = cleaned.length > 0 ? cleaned.slice(0, 40) : "screen";
+  return `${String(idx).padStart(2, "0")}-${slug}`;
 }
 
 function joinUrl(base: string, route: string): string {

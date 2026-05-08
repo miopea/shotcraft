@@ -28,3 +28,11 @@ between `goto()` and the screenshot — `click`, `fill`, `press`,
 `wait`, `waitForSelector`, `waitForUrl`, and `scroll`. Cap of 20
 actions per screen, 30s max wait. Lets you drive into modals, fill
 search inputs, dismiss tooltips, etc. before the camera fires.
+
+The Crawler also has a new **🔍 Discover routes** button that
+auto-crawls the target same-origin (BFS, depth 2, max 25 pages, 60s
+deadline) — including login if you've configured one — and returns
+a checklist of discovered paths with their `<title>` text. Tick
+which ones you want and they merge into the screens list. Powered
+by a new `POST /api/discover` endpoint with the same gating as
+`/api/capture`.
