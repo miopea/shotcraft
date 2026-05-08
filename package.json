@@ -6,7 +6,7 @@
   "homepage": "https://shotcraft.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shotcraft/shotcraft.git"
+    "url": "https://github.com/miopea/shotcraft.git"
   },
   "license": "MIT",
   "type": "module",

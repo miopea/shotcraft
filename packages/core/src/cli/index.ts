@@ -51,7 +51,7 @@ function notImplemented(name: string): never {
   console.error(
     `\nshotcraft ${name}: not implemented yet — v0 scaffold.\n\n` +
       `This subcommand lands in the v1 build. See:\n` +
-      `  https://github.com/shotcraft/shotcraft/blob/main/.claude/plans/shotcraft-v1.md\n`,
+      `  https://github.com/miopea/shotcraft/blob/main/.claude/plans/shotcraft-v1.md\n`,
   );
   process.exit(2);
 }
