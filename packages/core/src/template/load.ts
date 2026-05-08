@@ -87,9 +87,16 @@ async function importTemplate(pkg: string, cwd: string): Promise<unknown> {
   if (isAbsolute(pkg) && existsSync(pkg)) {
     return await import(pathToFileURL(pkg).href);
   }
-  // Resolve via the consumer project's node_modules. createRequire gives us
-  // the same lookup that `require(pkg)` would do from cwd, then we feed the
-  // resolved file URL back into dynamic import so ESM templates load.
+  // Resolve via the consumer project's node_modules. We anchor `createRequire`
+  // at the user's `package.json` so resolution starts from THEIR project (in
+  // a pnpm workspace, templates are linked into `consumer/node_modules/`,
+  // not into shotcraft's own dist directory).
+  //
+  // Templates are ESM-only but their `package.json` `exports` maps include
+  // a `default` condition so `createRequire().resolve()` (CJS) finds them
+  // — without `default` the resolver would report "No exports main defined"
+  // for any ESM-only consumer. We then dynamic-import the resolved file URL
+  // so the template loads as ESM regardless of how we resolved it.
   try {
     const req = createRequire(resolve(cwd, "package.json"));
     const resolved = req.resolve(pkg);

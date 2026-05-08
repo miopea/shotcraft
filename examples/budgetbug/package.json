@@ -1,0 +1,35 @@
+{
+  "name": "@shotcraft/example-budgetbug",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shotcraft example — drives the BudgetBug demo app (https://budgetbug.live) through all 6 first-party templates. Canonical first-real-world demo.",
+  "homepage": "https://shotcraft.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miopea/shotcraft.git",
+    "directory": "examples/budgetbug"
+  },
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "screenshots": "shotcraft",
+    "screenshots:capture": "shotcraft capture",
+    "screenshots:render": "shotcraft render",
+    "doctor": "shotcraft doctor",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@shotcraft/template-app-store-iphone": "workspace:*",
+    "@shotcraft/template-app-store-ipad": "workspace:*",
+    "@shotcraft/template-play-store-phone": "workspace:*",
+    "@shotcraft/template-play-store-tablet": "workspace:*",
+    "@shotcraft/template-readme-hero": "workspace:*",
+    "@shotcraft/template-social-og-card": "workspace:*",
+    "@types/node": "^22.7.0",
+    "shotcraft": "workspace:*",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

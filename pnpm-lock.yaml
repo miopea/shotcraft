@@ -35,6 +35,36 @@ importers:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@22.19.17)
 
+  examples/budgetbug:
+    devDependencies:
+      "@shotcraft/template-app-store-ipad":
+        specifier: workspace:*
+        version: link:../../packages/template-app-store-ipad
+      "@shotcraft/template-app-store-iphone":
+        specifier: workspace:*
+        version: link:../../packages/template-app-store-iphone
+      "@shotcraft/template-play-store-phone":
+        specifier: workspace:*
+        version: link:../../packages/template-play-store-phone
+      "@shotcraft/template-play-store-tablet":
+        specifier: workspace:*
+        version: link:../../packages/template-play-store-tablet
+      "@shotcraft/template-readme-hero":
+        specifier: workspace:*
+        version: link:../../packages/template-readme-hero
+      "@shotcraft/template-social-og-card":
+        specifier: workspace:*
+        version: link:../../packages/template-social-og-card
+      "@types/node":
+        specifier: ^22.7.0
+        version: 22.19.17
+      shotcraft:
+        specifier: workspace:*
+        version: link:../../packages/core
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+
   packages/core:
     dependencies:
       jiti:

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { findConfig, loadConfig } from "../../config/load.js";
 import { deriveCaptureSpecs } from "../../capture/spec.js";
+import { loadTemplates, type LoadedTemplate } from "../../template/load.js";
 
 export interface DoctorOptions {
   cwd?: string;
@@ -61,13 +62,27 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
   }
   log(`✓ schema: ${config.screens.length} screen(s) declared`);
 
-  // 3. Derive capture specs to surface what would actually run.
-  const specs = deriveCaptureSpecs(config, "/");
-  log(
-    `✓ specs: ${specs.length} capture(s) would run (${config.screens.length} screen × ${specs.length / Math.max(config.screens.length, 1)} theme)`,
-  );
+  // 3. Try to load configured templates so the spec count reflects reality.
+  //    Failures here aren't fatal — they're surfaced separately as warnings
+  //    so the schema check can still report green.
+  let loadedTemplates: ReadonlyArray<LoadedTemplate> = [];
+  if (config.templates && config.templates.length > 0) {
+    try {
+      loadedTemplates = await loadTemplates(config.templates, {
+        cwd: dirname(configPath),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to load configured templates: ${msg}`);
+      log(`! templates: load failed — ${msg}`);
+    }
+  }
 
-  // 4. Probe target (optional).
+  // 4. Derive capture specs from the loaded templates so the count is real.
+  const specs = deriveCaptureSpecs(config, "/", loadedTemplates);
+  log(`✓ specs: ${specs.length} capture(s) would run`);
+
+  // 5. Probe target (optional).
   if (options.skipTarget) {
     log("• target: probe skipped");
   } else {
@@ -80,7 +95,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
     }
   }
 
-  // 5. Discover installed templates from package.json deps.
+  // 6. Discover installed templates from package.json deps.
   const templates = discoverTemplates(dirname(configPath));
   if (templates.length === 0) {
     warnings.push(
