@@ -750,11 +750,19 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
         .count()
         .catch(() => 0);
       if (hasPasswordField > 0) {
+        // Scrape visible error text from the page so the user sees
+        // exactly what the login form is complaining about: "Invalid
+        // email or password", "Account locked", etc. Far more
+        // actionable than "credentials likely rejected".
+        const visibleError = await scrapeVisibleAuthError(page);
+        const detail = visibleError
+          ? `Page shows: "${visibleError}". `
+          : `No visible error text found on the page. `;
         throw new Error(
           `auth (form): submitted login but page is still on ${new URL(afterUrl).pathname} ` +
-            `with a password field present. Credentials likely rejected, or the submit button ` +
-            `selector didn't fire the form. Check email/password values + the "submit button" ` +
-            `selector in Step 1.`,
+            `with a password field present. ${detail}` +
+            `Likely cause: credentials wrong, or the submit button selector didn't fire the form. ` +
+            `Check email/password values + the "submit button" selector in Step 1.`,
         );
       }
     }
@@ -817,7 +825,55 @@ const SUBMIT_FALLBACK_SELECTORS: ReadonlyArray<string> = [
   "form button",
   "[data-testid*=login i]",
   "[data-testid*=signin i]",
+  // React-style buttons without type=submit, identified by text. Playwright's
+  // text= selector matches case-insensitive substring by default.
+  'button:has-text("Sign in")',
+  'button:has-text("Log in")',
+  'button:has-text("Login")',
+  'button:has-text("Continue")',
+  'button:has-text("Submit")',
 ];
+
+/**
+ * Look for visible "Invalid credentials" / "Account locked" / etc.
+ * messages on a failed-login page. Checks common error-display
+ * patterns (role=alert, [aria-live], common Tailwind/Bootstrap error
+ * classes). Returns the first non-empty match, capped to 200 chars.
+ */
+async function scrapeVisibleAuthError(page: Page): Promise<string | null> {
+  const result: unknown = await page
+    .evaluate(
+      `
+      (() => {
+        const selectors = [
+          '[role="alert"]',
+          '[aria-live="polite"]',
+          '[aria-live="assertive"]',
+          '.error',
+          '.error-message',
+          '.alert-error',
+          '.alert-danger',
+          '.text-red-500',
+          '.text-red-600',
+          '.text-red-700',
+          '.text-destructive',
+          '[data-testid*="error" i]',
+          'form .text-sm.text-red-500',
+        ];
+        for (const sel of selectors) {
+          for (const el of document.querySelectorAll(sel)) {
+            if (el.offsetParent === null) continue;
+            const t = (el.textContent || '').trim();
+            if (t && t.length > 2 && t.length < 500) return t.slice(0, 200);
+          }
+        }
+        return null;
+      })()
+    `,
+    )
+    .catch(() => null);
+  return typeof result === "string" && result.length > 0 ? result : null;
+}
 
 async function fillFirstMatch(
   page: Page,
