@@ -13,7 +13,9 @@ export interface TemplateInfo {
   pkg: string;
   displayName: string;
   category: TemplateCategory;
+  viewport: { width: number; height: number; dpr: number };
   output: { width: number; height: number };
+  isMobile: boolean;
   themes: ReadonlyArray<Theme>;
   samples: ReadonlyArray<TemplateSample>;
 }

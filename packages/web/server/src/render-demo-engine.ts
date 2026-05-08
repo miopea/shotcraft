@@ -138,74 +138,266 @@ async function runOne(
   req: RenderDemoRequest,
   wrapperPath: string,
 ): Promise<Buffer> {
-  const tmp = await mkdtemp(join(tmpdir(), "shotcraft-demo-"));
-  const rawPath = join(tmp, "raw.png");
-  const outPath = join(tmp, "out.png");
-
   const browser = await chromium.launch({ headless: true });
   try {
-    // Capture phase — the user's URL at the template's viewport.
-    {
-      const ctx = await browser.newContext({
-        viewport: { width: template.viewport.width, height: template.viewport.height },
-        deviceScaleFactor: template.viewport.dpr,
-        isMobile: template.isMobile,
-        hasTouch: template.isMobile,
-        colorScheme: theme,
-        locale: "en-US",
-        reducedMotion: "reduce",
-      });
-      const page = await ctx.newPage();
-      try {
-        // If target-app auth was supplied, run it before navigating to
-        // the captured URL. The capture context already has the right
-        // viewport + colorScheme; auth runs in this same context so any
-        // cookies / localStorage / session set during login survive
-        // into the capture goto.
-        if (req.auth) {
-          await runTargetAuth(page, req.url, req.auth);
-        }
-        await page.goto(req.url, { waitUntil: "networkidle", timeout: 25_000 });
-        // Brief settle so chart animations + lazy images land. Live-demo
-        // doesn't expose a `waitMs` knob — keep it short.
-        await page.waitForTimeout(1200);
-        await page.screenshot({ path: rawPath, fullPage: false });
-      } finally {
-        await ctx.close();
-      }
-    }
-
-    // Render phase — wrapper.html composes the captured raw.
-    {
-      const params = new URLSearchParams();
-      params.set("caption", req.caption);
-      if (req.subtitle) params.set("subtitle", req.subtitle);
-      params.set("theme", theme);
-      params.set("imageUrl", pathToFileURL(rawPath).href);
-      const wrapperUrl = `${pathToFileURL(wrapperPath).href}?${params.toString()}`;
-
-      const ctx = await browser.newContext({
-        viewport: { width: template.output.width, height: template.output.height },
-        deviceScaleFactor: 1,
-      });
-      const page = await ctx.newPage();
-      try {
-        await page.goto(wrapperUrl, { waitUntil: "networkidle", timeout: 15_000 });
-        // Predicate strings run inside the browser — keeping them as
-        // strings means this file doesn't need DOM lib in tsconfig.
-        await page.waitForFunction(`document.body.dataset.rendered === "true"`, undefined, {
-          timeout: 15_000,
-        });
-        await page.evaluate(`document.fonts.ready`);
-        await page.screenshot({ path: outPath, type: "png", fullPage: false });
-      } finally {
-        await ctx.close();
-      }
-    }
-
-    return await readFile(outPath);
+    const raw = await captureWithBrowser(browser, {
+      url: req.url,
+      viewport: template.viewport,
+      isMobile: template.isMobile,
+      theme,
+      ...(req.auth ? { auth: req.auth } : {}),
+      waitMs: 1200,
+    });
+    return await composeWithBrowser(browser, {
+      raw,
+      wrapperPath,
+      output: template.output,
+      caption: req.caption,
+      ...(req.subtitle !== undefined ? { subtitle: req.subtitle } : {}),
+      theme,
+    });
   } finally {
     await browser.close().catch(() => undefined);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone capture + compose — used by the Crawler page's two-step flow.
+// Each entry point queues behind the same in-flight mutex used by
+// `runRenderDemo`, so a Crawler session and a single-shot demo render
+// never compete for Chromium.
+// ---------------------------------------------------------------------------
+
+export interface CaptureScreenRequest {
+  url: string;
+  viewport: { width: number; height: number; dpr: number };
+  isMobile?: boolean;
+  theme?: "dark" | "light";
+  auth?: RenderDemoAuth;
+  /** Extra ms to wait after `networkidle` (chart animations, etc.). */
+  waitMs?: number;
+}
+
+export interface ComposeScreenRequest {
+  raw: Buffer;
+  templateId: string;
+  caption: string;
+  subtitle?: string;
+  theme?: "dark" | "light";
+}
+
+export type EngineResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
+
+/**
+ * Capture-only entry point. No template composition — returns the raw
+ * screenshot at the given viewport. Same SSRF + auth semantics as the
+ * full pipeline.
+ */
+export async function captureScreen(req: CaptureScreenRequest): Promise<EngineResult<Buffer>> {
+  if (!req || typeof req !== "object") {
+    return { ok: false, status: 400, error: "Request must be a JSON object." };
+  }
+  if (typeof req.url !== "string" || req.url.length === 0) {
+    return { ok: false, status: 400, error: "`url` is required." };
+  }
+  if (
+    !req.viewport ||
+    typeof req.viewport.width !== "number" ||
+    typeof req.viewport.height !== "number" ||
+    typeof req.viewport.dpr !== "number"
+  ) {
+    return { ok: false, status: 400, error: "`viewport` must be { width, height, dpr } numbers." };
+  }
+  if (req.auth) {
+    const authError = validateAuth(req.auth);
+    if (authError) return authError;
+  }
+  const urlCheck = await validateUrl(req.url);
+  if (!urlCheck.ok) return urlCheck;
+
+  const job = inflight.then(() => withDeadline(60_000, runCapture(req)));
+  inflight = job.catch(() => undefined);
+  try {
+    const value = await job;
+    return { ok: true, value };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 500,
+      error: `capture failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+/**
+ * Render-only entry point. Takes a previously-captured raw + template id
+ * + caption, returns the composite. No external URL hits — no SSRF check
+ * needed.
+ */
+export async function composeScreen(req: ComposeScreenRequest): Promise<EngineResult<Buffer>> {
+  if (!req || typeof req !== "object") {
+    return { ok: false, status: 400, error: "Request must be a JSON object." };
+  }
+  if (!Buffer.isBuffer(req.raw) || req.raw.length === 0) {
+    return { ok: false, status: 400, error: "`raw` PNG buffer is required." };
+  }
+  if (typeof req.caption !== "string" || req.caption.length === 0) {
+    return { ok: false, status: 400, error: "`caption` is required." };
+  }
+  if (req.caption.length > 240) {
+    return { ok: false, status: 400, error: "`caption` is too long (max 240)." };
+  }
+  if (req.subtitle !== undefined && req.subtitle.length > 480) {
+    return { ok: false, status: 400, error: "`subtitle` is too long (max 480)." };
+  }
+  const template = TEMPLATE_REGISTRY.find((t) => t.id === req.templateId);
+  if (!template) {
+    return { ok: false, status: 400, error: `Unknown templateId: ${String(req.templateId)}` };
+  }
+  const theme: "dark" | "light" =
+    req.theme === "dark" || req.theme === "light" ? req.theme : (template.themes[0] ?? "dark");
+  if (!template.themes.includes(theme)) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Template "${template.id}" doesn't support theme "${theme}".`,
+    };
+  }
+  const wrapperPath = join(TEMPLATES_ROOT, template.id, "wrapper.html");
+  if (!(await fileExists(wrapperPath))) {
+    return {
+      ok: false,
+      status: 500,
+      error: `Server missing template assets for "${template.id}".`,
+    };
+  }
+
+  const job = inflight.then(() =>
+    withDeadline(45_000, runCompose(template, theme, wrapperPath, req)),
+  );
+  inflight = job.catch(() => undefined);
+  try {
+    const value = await job;
+    return { ok: true, value };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 500,
+      error: `compose failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+async function runCapture(req: CaptureScreenRequest): Promise<Buffer> {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    return await captureWithBrowser(browser, req);
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+}
+
+async function runCompose(
+  template: TemplateInfo,
+  theme: "dark" | "light",
+  wrapperPath: string,
+  req: ComposeScreenRequest,
+): Promise<Buffer> {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    return await composeWithBrowser(browser, {
+      raw: req.raw,
+      wrapperPath,
+      output: template.output,
+      caption: req.caption,
+      ...(req.subtitle !== undefined ? { subtitle: req.subtitle } : {}),
+      theme,
+    });
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+}
+
+interface CaptureWithBrowserArgs {
+  url: string;
+  viewport: { width: number; height: number; dpr: number };
+  isMobile?: boolean;
+  theme?: "dark" | "light";
+  auth?: RenderDemoAuth;
+  waitMs?: number;
+}
+
+async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs): Promise<Buffer> {
+  const tmp = await mkdtemp(join(tmpdir(), "shotcraft-cap-"));
+  const rawPath = join(tmp, "raw.png");
+  try {
+    const ctx = await browser.newContext({
+      viewport: { width: args.viewport.width, height: args.viewport.height },
+      deviceScaleFactor: args.viewport.dpr,
+      isMobile: args.isMobile ?? false,
+      hasTouch: args.isMobile ?? false,
+      colorScheme: args.theme ?? "dark",
+      locale: "en-US",
+      reducedMotion: "reduce",
+    });
+    const page = await ctx.newPage();
+    try {
+      if (args.auth) {
+        await runTargetAuth(page, args.url, args.auth);
+      }
+      await page.goto(args.url, { waitUntil: "networkidle", timeout: 25_000 });
+      await page.waitForTimeout(args.waitMs ?? 1200);
+      await page.screenshot({ path: rawPath, fullPage: false });
+    } finally {
+      await ctx.close();
+    }
+    return await readFile(rawPath);
+  } finally {
+    await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+interface ComposeWithBrowserArgs {
+  raw: Buffer;
+  wrapperPath: string;
+  output: { width: number; height: number };
+  caption: string;
+  subtitle?: string;
+  theme: "dark" | "light";
+}
+
+async function composeWithBrowser(browser: Browser, args: ComposeWithBrowserArgs): Promise<Buffer> {
+  const tmp = await mkdtemp(join(tmpdir(), "shotcraft-compose-"));
+  const rawPath = join(tmp, "raw.png");
+  const outPath = join(tmp, "out.png");
+  try {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(rawPath, args.raw);
+
+    const params = new URLSearchParams();
+    params.set("caption", args.caption);
+    if (args.subtitle) params.set("subtitle", args.subtitle);
+    params.set("theme", args.theme);
+    params.set("imageUrl", pathToFileURL(rawPath).href);
+    const wrapperUrl = `${pathToFileURL(args.wrapperPath).href}?${params.toString()}`;
+
+    const ctx = await browser.newContext({
+      viewport: { width: args.output.width, height: args.output.height },
+      deviceScaleFactor: 1,
+    });
+    const page = await ctx.newPage();
+    try {
+      await page.goto(wrapperUrl, { waitUntil: "networkidle", timeout: 15_000 });
+      await page.waitForFunction(`document.body.dataset.rendered === "true"`, undefined, {
+        timeout: 15_000,
+      });
+      await page.evaluate(`document.fonts.ready`);
+      await page.screenshot({ path: outPath, type: "png", fullPage: false });
+    } finally {
+      await ctx.close();
+    }
+    return await readFile(outPath);
+  } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
   }
 }

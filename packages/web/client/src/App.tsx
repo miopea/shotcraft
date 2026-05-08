@@ -3,6 +3,7 @@ import { Home } from "./pages/Home.js";
 import { Gallery } from "./pages/Gallery.js";
 import { Builder } from "./pages/Builder.js";
 import { Demo } from "./pages/Demo.js";
+import { Crawler } from "./pages/Crawler.js";
 
 export function App() {
   return (
@@ -14,6 +15,9 @@ export function App() {
             Shotcraft
           </NavLink>
           <nav>
+            <NavLink to="/crawler" className={({ isActive }) => (isActive ? "active" : "")}>
+              Crawler
+            </NavLink>
             <NavLink to="/templates" className={({ isActive }) => (isActive ? "active" : "")}>
               Templates
             </NavLink>
@@ -39,6 +43,7 @@ export function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/crawler" element={<Crawler />} />
           <Route path="/templates" element={<Gallery />} />
           <Route path="/builder" element={<Builder />} />
           <Route path="/demo" element={<Demo />} />

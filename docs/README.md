@@ -19,6 +19,10 @@ step, no second source of truth to keep in sync.
 6. **[Live demo](./live-demo.md)** — the hosted `/demo` endpoint that
    runs renders server-side, plus the env vars to enable it on your own
    deployment.
+7. **[Crawler](./crawler.md)** — the multi-screen authoring tool: define
+   screens, capture them in batch (with target-app auth), tweak captions,
+   render through any combination of templates. Lives at `/crawler` on
+   the hosted companion.
 
 ## Try it interactively
 
