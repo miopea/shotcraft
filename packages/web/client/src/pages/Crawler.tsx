@@ -99,25 +99,111 @@ const DEFAULT_SCREENS: ReadonlyArray<ScreenInput> = [
   { id: rid(), route: "/", name: "01-home", caption: "Welcome", subtitle: "", actions: [] },
 ];
 
+/**
+ * Persisted session — what we keep in localStorage so reopening the
+ * Crawler doesn't mean re-pasting the token + form-login + screens.
+ *
+ * Captured raw images and rendered composites do NOT live here (too
+ * big for localStorage); they'll move to IndexedDB in Phase D.
+ *
+ * Passwords and credentials persist alongside everything else: this is
+ * an individual-use tool against the user's own browser profile, and
+ * the explicit "Forget saved" link is the safety valve.
+ */
+const PERSIST_KEY = "shotcraft.crawler.session.v1";
+
+interface PersistedSession {
+  token: string;
+  target: string;
+  screens: ScreenInput[];
+  captureTemplateId: string;
+  captureTheme: "dark" | "light";
+  auth: AuthState;
+  renderTemplateIds: string[];
+}
+
+function loadPersisted(): Partial<PersistedSession> {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<PersistedSession> | null;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
 export function Crawler() {
+  // Hydrate persisted state once on mount. After this, every state
+  // change re-serializes via the effect below.
+  const initial = useMemo(() => loadPersisted(), []);
+
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [templates, setTemplates] = useState<ReadonlyArray<TemplateInfo>>([]);
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(initial.token ?? "");
 
-  const [target, setTarget] = useState("https://shotcraft.bfgsolutions.net");
-  const [screens, setScreens] = useState<ScreenInput[]>(DEFAULT_SCREENS.slice());
-  const [captureTemplateId, setCaptureTemplateId] = useState("readme-hero");
-  const [captureTheme, setCaptureTheme] = useState<"dark" | "light">("dark");
-  const [auth, setAuth] = useState<AuthState>(DEFAULT_AUTH);
+  const [target, setTarget] = useState(initial.target ?? "https://shotcraft.bfgsolutions.net");
+  const [screens, setScreens] = useState<ScreenInput[]>(
+    initial.screens && initial.screens.length > 0 ? initial.screens : DEFAULT_SCREENS.slice(),
+  );
+  const [captureTemplateId, setCaptureTemplateId] = useState(
+    initial.captureTemplateId ?? "readme-hero",
+  );
+  const [captureTheme, setCaptureTheme] = useState<"dark" | "light">(
+    initial.captureTheme === "light" ? "light" : "dark",
+  );
+  const [auth, setAuth] = useState<AuthState>(initial.auth ?? DEFAULT_AUTH);
 
   const [captures, setCaptures] = useState<Record<string, ScreenCapture>>({});
   const [progress, setProgress] = useState<Record<string, CaptureProgress>>({});
   const [composites, setComposites] = useState<ScreenComposite[]>([]);
 
-  const [renderTemplateIds, setRenderTemplateIds] = useState<Set<string>>(new Set(["readme-hero"]));
+  const [renderTemplateIds, setRenderTemplateIds] = useState<Set<string>>(
+    () => new Set(initial.renderTemplateIds ?? ["readme-hero"]),
+  );
   const [renderingAll, setRenderingAll] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [discoverState, setDiscoverState] = useState<DiscoverState>({ status: "idle" });
+
+  // Persist on change. Debounced 500ms so typing into a caption field
+  // doesn't write 30 times.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const session: PersistedSession = {
+        token,
+        target,
+        screens,
+        captureTemplateId,
+        captureTheme,
+        auth,
+        renderTemplateIds: Array.from(renderTemplateIds),
+      };
+      try {
+        localStorage.setItem(PERSIST_KEY, JSON.stringify(session));
+      } catch {
+        // localStorage throws when full or in some private-browsing modes.
+        // The user just loses persistence for this session.
+      }
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [token, target, screens, captureTemplateId, captureTheme, auth, renderTemplateIds]);
+
+  const forgetAll = (): void => {
+    if (!window.confirm("Forget all saved settings (token, target, auth, screens)?")) return;
+    try {
+      localStorage.removeItem(PERSIST_KEY);
+    } catch {
+      // Best-effort.
+    }
+    setToken("");
+    setTarget("https://shotcraft.bfgsolutions.net");
+    setScreens(DEFAULT_SCREENS.slice());
+    setCaptureTemplateId("readme-hero");
+    setCaptureTheme("dark");
+    setAuth(DEFAULT_AUTH);
+    setRenderTemplateIds(new Set(["readme-hero"]));
+  };
 
   useEffect(() => {
     fetch("/api/health")
@@ -457,11 +543,21 @@ export function Crawler() {
 
   return (
     <section className="container">
-      <h1>Crawler</h1>
+      <div className="crawler-header">
+        <h1>Crawler</h1>
+        <button
+          type="button"
+          className="link-btn"
+          onClick={forgetAll}
+          title="Clear the saved token, target URL, auth, and screens"
+        >
+          Forget saved settings
+        </button>
+      </div>
       <p className="lede">
         Define your screens, capture them all in one go (with target-app login if you have one),
-        tweak captions in place, then render through whichever templates you want. Everything stays
-        in your browser — no server-side session.
+        tweak captions in place, then render through whichever templates you want. Settings persist
+        in this browser; captures and renders stay in this tab only.
       </p>
 
       {isDisabled && (

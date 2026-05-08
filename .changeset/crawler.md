@@ -36,3 +36,11 @@ a checklist of discovered paths with their `<title>` text. Tick
 which ones you want and they merge into the screens list. Powered
 by a new `POST /api/discover` endpoint with the same gating as
 `/api/capture`.
+
+The Crawler now **persists settings in this browser** — token,
+target URL, target-app auth (including credentials), screen list
+with actions, capture template/theme, and selected render
+templates. Reload, close-and-reopen, or come back tomorrow and it's
+all there. A "Forget saved settings" link in the page header clears
+everything. Captures and renders still live in the tab only — those
+move to IndexedDB in a later release.

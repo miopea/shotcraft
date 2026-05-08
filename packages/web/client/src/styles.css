@@ -790,6 +790,34 @@ label {
   }
 }
 
+/* Crawler header — H1 + "Forget saved" link */
+
+.crawler-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.crawler-header h1 {
+  margin: 0;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.link-btn:hover {
+  color: var(--accent);
+}
+
 /* Discover panel — auto-crawl results picker */
 
 .discover-panel {
