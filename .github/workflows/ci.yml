@@ -19,8 +19,11 @@ jobs:
       - name: Install Playwright Chromium
         # Snapshot tests in core + every template launch a real Chromium.
         # `pnpm install` doesn't trigger Playwright's browser download
-        # because the install hook isn't on `allowBuilds`.
-        run: pnpm exec playwright install --with-deps chromium
+        # because the install hook isn't on `allowBuilds`. Run via the
+        # workspace package that actually depends on playwright (the
+        # root has no `playwright` dep, so plain `pnpm exec` errors with
+        # "Command playwright not found").
+        run: pnpm --filter @shotcraft/web exec playwright install --with-deps chromium
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
