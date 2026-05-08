@@ -843,30 +843,71 @@ async function withDeadline<T>(ms: number, p: Promise<T>): Promise<T> {
 }
 
 /**
- * Auto-discovery: BFS link-crawl from a start URL. Lets the Crawler page
- * suggest a starting list of routes instead of forcing the operator to
- * type every path. Hard-capped to keep the App Service worker honest:
- * one browser, one page, sequential navigation, 60s deadline overall.
+ * Auto-discovery: combine multiple route-finding techniques against a
+ * start URL. Same-origin only (SSRF guard); 60s overall deadline shared
+ * across all enabled techniques.
  *
- * Limitations the caller should know:
- *   - Same-origin only by default — blind crawling foreign hosts is an
- *     SSRF amplifier and almost never what the operator wants.
- *   - Pure link extraction (`<a href>`). Routes only reachable via
- *     button clicks / state changes / dynamic IDs won't be found —
- *     those need explicit screen entries with actions.
+ * Available techniques (each toggleable):
+ *   - linkCrawl:    BFS `<a href>` links, the original v0.1 behavior.
+ *   - sitemap:      GET /sitemap.xml; if present, parse <loc> entries.
+ *   - commonRoutes: probe a list of standard SaaS paths
+ *                   (/dashboard, /settings, /billing, ...).
+ *   - navClick:     [coming in v0.2.x] click buttons inside <nav> /
+ *                   header / sidebar to surface React-Router-style
+ *                   non-anchor routes.
+ *
+ * Modal-state crawling (clicking buttons on a single page to surface
+ * dialog states) is opt-in per-screen via `discoverable: true` in the
+ * config; not part of this orchestrator.
  */
 export interface DiscoverRequest {
   url: string;
   maxDepth?: number;
   maxPages?: number;
   auth?: RenderDemoAuth;
+  techniques?: DiscoverTechniques;
+  /** Override for `commonRoutes` probe list. Defaults to COMMON_ROUTES. */
+  commonRouteList?: ReadonlyArray<string>;
+}
+
+export interface DiscoverTechniques {
+  linkCrawl?: boolean;
+  sitemap?: boolean;
+  commonRoutes?: boolean;
+  navClick?: boolean;
 }
 
 export interface DiscoveredRoute {
   path: string;
   title: string;
   depth: number;
+  source: "link" | "sitemap" | "common" | "nav";
 }
+
+/**
+ * Default probe list for the `commonRoutes` technique. These are paths
+ * a typical SaaS app exposes; we GET each one through the page's auth
+ * context and keep the 200/30x ones.
+ */
+const COMMON_ROUTES: ReadonlyArray<string> = [
+  "/",
+  "/dashboard",
+  "/home",
+  "/settings",
+  "/profile",
+  "/account",
+  "/billing",
+  "/about",
+  "/pricing",
+  "/login",
+  "/signup",
+  "/help",
+  "/docs",
+  "/admin",
+  "/team",
+  "/projects",
+  "/notifications",
+];
 
 const DISCOVER_DEFAULTS = {
   maxDepth: 2,
@@ -907,6 +948,15 @@ export async function discoverRoutes(
     DISCOVER_HARD_CAPS.maxPages,
   );
 
+  // Defaults: link + sitemap on, common off (noisy on apps that don't
+  // expose those paths), nav-click off (not implemented yet).
+  const techniques: Required<DiscoverTechniques> = {
+    linkCrawl: req.techniques?.linkCrawl ?? true,
+    sitemap: req.techniques?.sitemap ?? true,
+    commonRoutes: req.techniques?.commonRoutes ?? false,
+    navClick: req.techniques?.navClick ?? false,
+  };
+
   const job = inflight.then(() =>
     withDeadline(
       60_000,
@@ -914,6 +964,8 @@ export async function discoverRoutes(
         url: req.url,
         maxDepth,
         maxPages,
+        techniques,
+        ...(req.commonRouteList ? { commonRouteList: req.commonRouteList } : {}),
         ...(req.auth ? { auth: req.auth } : {}),
       }),
     ),
@@ -935,6 +987,8 @@ interface RunDiscoverArgs {
   url: string;
   maxDepth: number;
   maxPages: number;
+  techniques: Required<DiscoverTechniques>;
+  commonRouteList?: ReadonlyArray<string>;
   auth?: RenderDemoAuth;
 }
 
@@ -965,54 +1019,259 @@ async function discoverWithBrowser(
       await runTargetAuth(page, args.url, args.auth);
     }
 
-    const visited = new Set<string>();
-    const results: DiscoveredRoute[] = [];
-    const queue: Array<{ url: string; depth: number }> = [{ url: start.toString(), depth: 0 }];
+    // Always navigate to the start URL once so subsequent fetches in
+    // page.evaluate() share the post-auth cookies / origin.
+    try {
+      await page.goto(start.toString(), {
+        waitUntil: "domcontentloaded",
+        timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
+      });
+    } catch {
+      // Even if the initial nav fails we let the techniques try; sitemap
+      // + common-routes fetches still work as long as the origin is
+      // reachable.
+    }
 
-    while (queue.length > 0 && results.length < args.maxPages) {
-      const next = queue.shift();
-      if (!next) break;
-      const norm = normalizeUrl(next.url);
-      if (norm === null || visited.has(norm)) continue;
-      visited.add(norm);
+    // Each technique returns DiscoveredRoute[]; `merged` dedupes by
+    // normalized path so the same URL surfaced by two techniques
+    // doesn't show twice (first-source wins).
+    const merged: Map<string, DiscoveredRoute> = new Map();
+    const addRoute = (r: DiscoveredRoute): void => {
+      const key = r.path.replace(/\/$/, "") || "/";
+      if (!merged.has(key)) merged.set(key, r);
+    };
 
-      try {
-        await page.goto(next.url, {
-          waitUntil: "domcontentloaded",
-          timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
-        });
-      } catch {
-        // Failed nav: don't enqueue children, but don't abort the whole crawl.
-        continue;
-      }
-
-      const title = await page.title().catch(() => "");
-      const path = pathForResult(new URL(next.url), origin);
-      results.push({ path, title: title.slice(0, 200), depth: next.depth });
-
-      if (next.depth >= args.maxDepth) continue;
-
-      // server tsconfig has no DOM lib — pass a string evaluator and
-      // narrow the unknown result.
-      const raw: unknown = await page
-        .evaluate(
-          "Array.from(document.querySelectorAll('a[href]')).map((a) => a.href).filter(Boolean)",
-        )
-        .catch(() => [] as unknown);
-      const hrefs: string[] = Array.isArray(raw)
-        ? raw.filter((x): x is string => typeof x === "string")
-        : [];
-      for (const href of hrefs) {
-        const child = parseSameOriginHref(href, origin);
-        if (!child) continue;
-        if (visited.has(normalizeUrl(child) ?? "")) continue;
-        queue.push({ url: child, depth: next.depth + 1 });
+    if (args.techniques.sitemap) {
+      const found = await discoverViaSitemap(page, origin).catch(() => [] as DiscoveredRoute[]);
+      for (const r of found) {
+        addRoute(r);
+        if (merged.size >= args.maxPages) break;
       }
     }
-    return results;
+
+    if (args.techniques.commonRoutes && merged.size < args.maxPages) {
+      const list = args.commonRouteList ?? COMMON_ROUTES;
+      const found = await discoverViaCommonRoutes(page, origin, list).catch(
+        () => [] as DiscoveredRoute[],
+      );
+      for (const r of found) {
+        addRoute(r);
+        if (merged.size >= args.maxPages) break;
+      }
+    }
+
+    if (args.techniques.linkCrawl && merged.size < args.maxPages) {
+      const found = await discoverViaLinks(page, origin, args).catch(() => [] as DiscoveredRoute[]);
+      for (const r of found) {
+        addRoute(r);
+        if (merged.size >= args.maxPages) break;
+      }
+    }
+
+    return Array.from(merged.values()).sort((a, b) => a.path.localeCompare(b.path));
   } finally {
     await ctx.close();
   }
+}
+
+/**
+ * Fetch /sitemap.xml through the page's auth context, regex out
+ * `<loc>...</loc>` entries, return the same-origin ones. No XML
+ * parser dependency — sitemap.xml shape is narrow and well-known.
+ */
+async function discoverViaSitemap(page: Page, origin: string): Promise<DiscoveredRoute[]> {
+  interface FetchResult {
+    status: number;
+    body: string;
+  }
+  const result: unknown = await page
+    .evaluate(
+      `
+      (async () => {
+        try {
+          const r = await fetch('/sitemap.xml', { credentials: 'include' });
+          const body = await r.text();
+          return { status: r.status, body };
+        } catch (e) {
+          return { status: 0, body: '' };
+        }
+      })()
+    `,
+    )
+    .catch(() => ({ status: 0, body: "" }));
+
+  const candidate = result as { status?: unknown; body?: unknown } | null;
+  const fetched: FetchResult =
+    candidate &&
+    typeof candidate === "object" &&
+    typeof candidate.status === "number" &&
+    typeof candidate.body === "string"
+      ? { status: candidate.status, body: candidate.body }
+      : { status: 0, body: "" };
+
+  if (fetched.status < 200 || fetched.status >= 300 || fetched.body.length === 0) return [];
+
+  const out: DiscoveredRoute[] = [];
+  const locRegex = /<loc>\s*([^<\s][^<]*?)\s*<\/loc>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = locRegex.exec(fetched.body)) !== null) {
+    const raw = m[1];
+    if (!raw) continue;
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      continue;
+    }
+    if (parsed.origin !== origin) continue;
+    out.push({
+      path: pathForResult(parsed, origin),
+      title: "",
+      depth: 0,
+      source: "sitemap",
+    });
+  }
+  return out;
+}
+
+/**
+ * Probe a list of standard SaaS paths in parallel, keep the 200s.
+ * Title is regex'd from the response body so we don't spend a goto
+ * per route. SPAs with client-rendered titles will return the index
+ * shell title (same for every route) — useful enough.
+ */
+async function discoverViaCommonRoutes(
+  page: Page,
+  origin: string,
+  routes: ReadonlyArray<string>,
+): Promise<DiscoveredRoute[]> {
+  void origin; // reserved for absolute-URL probe support
+  const result: unknown = await page
+    .evaluate(
+      `
+      (async (paths) => {
+        const probes = await Promise.all(
+          paths.map(async (p) => {
+            try {
+              const r = await fetch(p, { credentials: 'include', method: 'GET' });
+              if (r.status < 200 || r.status >= 300) {
+                return { path: p, status: r.status, title: '', bodyLen: 0 };
+              }
+              const body = await r.text();
+              const m = /<title[^>]*>([^<]*)<\\/title>/i.exec(body);
+              const title = m && m[1] ? m[1].trim().slice(0, 200) : '';
+              return { path: p, status: r.status, title, bodyLen: body.length };
+            } catch (e) {
+              return { path: p, status: 0, title: '', bodyLen: 0 };
+            }
+          })
+        );
+        return probes;
+      })(${JSON.stringify(routes)})
+    `,
+    )
+    .catch(() => [] as unknown);
+
+  if (!Array.isArray(result)) return [];
+
+  interface Probe {
+    path: string;
+    status: number;
+    title: string;
+    bodyLen: number;
+  }
+  const probes: Probe[] = [];
+  for (const item of result) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as { path?: unknown; status?: unknown; title?: unknown; bodyLen?: unknown };
+    if (typeof o.path !== "string" || typeof o.status !== "number") continue;
+    if (o.status < 200 || o.status >= 300) continue;
+    probes.push({
+      path: o.path,
+      status: o.status,
+      title: typeof o.title === "string" ? o.title : "",
+      bodyLen: typeof o.bodyLen === "number" ? o.bodyLen : 0,
+    });
+  }
+
+  // SPA-shell filter: if more than half the 200-responses share an
+  // identical body length, that length is the catch-all shell and the
+  // technique is hallucinating routes. Drop the shared-length set; keep
+  // any outliers (real, distinct pages).
+  const lenCounts = new Map<number, number>();
+  for (const p of probes) lenCounts.set(p.bodyLen, (lenCounts.get(p.bodyLen) ?? 0) + 1);
+  const shellLen = pickShellLength(lenCounts, probes.length);
+
+  return probes
+    .filter((p) => p.bodyLen !== shellLen)
+    .map((p) => ({
+      path: p.path,
+      title: p.title,
+      depth: 0,
+      source: "common" as const,
+    }));
+}
+
+function pickShellLength(counts: Map<number, number>, total: number): number | null {
+  if (total < 3) return null;
+  for (const [len, count] of counts.entries()) {
+    if (count >= Math.ceil(total / 2)) return len;
+  }
+  return null;
+}
+
+/**
+ * Original v0.1 behavior — BFS link-crawl via `<a href>`. Extracted
+ * out of the orchestrator so it composes with the other techniques.
+ */
+async function discoverViaLinks(
+  page: Page,
+  origin: string,
+  args: RunDiscoverArgs,
+): Promise<DiscoveredRoute[]> {
+  const start = new URL(args.url);
+  const visited = new Set<string>();
+  const results: DiscoveredRoute[] = [];
+  const queue: Array<{ url: string; depth: number }> = [{ url: start.toString(), depth: 0 }];
+
+  while (queue.length > 0 && results.length < args.maxPages) {
+    const next = queue.shift();
+    if (!next) break;
+    const norm = normalizeUrl(next.url);
+    if (norm === null || visited.has(norm)) continue;
+    visited.add(norm);
+
+    try {
+      await page.goto(next.url, {
+        waitUntil: "domcontentloaded",
+        timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
+      });
+    } catch {
+      continue;
+    }
+
+    const title = await page.title().catch(() => "");
+    const path = pathForResult(new URL(next.url), origin);
+    results.push({ path, title: title.slice(0, 200), depth: next.depth, source: "link" });
+
+    if (next.depth >= args.maxDepth) continue;
+
+    const raw: unknown = await page
+      .evaluate(
+        "Array.from(document.querySelectorAll('a[href]')).map((a) => a.href).filter(Boolean)",
+      )
+      .catch(() => [] as unknown);
+    const hrefs: string[] = Array.isArray(raw)
+      ? raw.filter((x): x is string => typeof x === "string")
+      : [];
+    for (const href of hrefs) {
+      const child = parseSameOriginHref(href, origin);
+      if (!child) continue;
+      if (visited.has(normalizeUrl(child) ?? "")) continue;
+      queue.push({ url: child, depth: next.depth + 1 });
+    }
+  }
+  return results;
 }
 
 function parseSameOriginHref(href: string, origin: string): string | null {

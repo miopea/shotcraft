@@ -79,11 +79,28 @@ interface CaptureProgress {
   error?: string;
 }
 
+type DiscoverSource = "link" | "sitemap" | "common" | "nav";
+
 interface DiscoveredRoute {
   path: string;
   title: string;
   depth: number;
+  source: DiscoverSource;
 }
+
+interface DiscoverTechniques {
+  linkCrawl: boolean;
+  sitemap: boolean;
+  commonRoutes: boolean;
+  navClick: boolean;
+}
+
+const DEFAULT_TECHNIQUES: DiscoverTechniques = {
+  linkCrawl: true,
+  sitemap: true,
+  commonRoutes: false,
+  navClick: false,
+};
 
 type DiscoverState =
   | { status: "idle" }
@@ -120,6 +137,7 @@ interface PersistedSession {
   captureTheme: "dark" | "light";
   auth: AuthState;
   renderTemplateIds: string[];
+  techniques: DiscoverTechniques;
 }
 
 function loadPersisted(): Partial<PersistedSession> {
@@ -165,6 +183,9 @@ export function Crawler() {
   const [renderingAll, setRenderingAll] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [discoverState, setDiscoverState] = useState<DiscoverState>({ status: "idle" });
+  const [techniques, setTechniques] = useState<DiscoverTechniques>(
+    initial.techniques ?? DEFAULT_TECHNIQUES,
+  );
 
   // Persist on change. Debounced 500ms so typing into a caption field
   // doesn't write 30 times.
@@ -178,6 +199,7 @@ export function Crawler() {
         captureTheme,
         auth,
         renderTemplateIds: Array.from(renderTemplateIds),
+        techniques,
       };
       try {
         localStorage.setItem(PERSIST_KEY, JSON.stringify(session));
@@ -187,7 +209,16 @@ export function Crawler() {
       }
     }, 500);
     return () => clearTimeout(handle);
-  }, [token, target, screens, captureTemplateId, captureTheme, auth, renderTemplateIds]);
+  }, [
+    token,
+    target,
+    screens,
+    captureTemplateId,
+    captureTheme,
+    auth,
+    renderTemplateIds,
+    techniques,
+  ]);
 
   const forgetAll = (): void => {
     if (!window.confirm("Forget all saved settings (token, target, auth, screens)?")) return;
@@ -203,6 +234,7 @@ export function Crawler() {
     setCaptureTheme("dark");
     setAuth(DEFAULT_AUTH);
     setRenderTemplateIds(new Set(["readme-hero"]));
+    setTechniques(DEFAULT_TECHNIQUES);
   };
 
   useEffect(() => {
@@ -255,6 +287,7 @@ export function Crawler() {
         headers,
         body: JSON.stringify({
           url: target,
+          techniques,
           ...(authPayload ? { auth: authPayload } : {}),
         }),
       });
@@ -647,6 +680,65 @@ export function Crawler() {
           </fieldset>
 
           <AuthFieldset auth={auth} update={updateAuth} disabled={isDisabled} />
+
+          <fieldset className="discovery-techniques">
+            <legend>Discovery techniques</legend>
+            <p className="field-hint" style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+              Which methods should "🔍 Discover routes" use? Login (above) runs first if configured.
+            </p>
+            <label className="discover-tech-row">
+              <input
+                type="checkbox"
+                checked={techniques.linkCrawl}
+                onChange={(e) => setTechniques((t) => ({ ...t, linkCrawl: e.target.checked }))}
+                disabled={isDisabled}
+              />
+              <span className="discover-tech-name">Link crawl</span>
+              <span className="discover-tech-desc">
+                BFS <code>&lt;a href&gt;</code> from start URL. Original v0.1 behavior.
+              </span>
+            </label>
+            <label className="discover-tech-row">
+              <input
+                type="checkbox"
+                checked={techniques.sitemap}
+                onChange={(e) => setTechniques((t) => ({ ...t, sitemap: e.target.checked }))}
+                disabled={isDisabled}
+              />
+              <span className="discover-tech-name">Sitemap.xml</span>
+              <span className="discover-tech-desc">
+                Fetch <code>/sitemap.xml</code>; parse <code>&lt;loc&gt;</code> entries. Cheap, huge
+                yield for content sites.
+              </span>
+            </label>
+            <label className="discover-tech-row">
+              <input
+                type="checkbox"
+                checked={techniques.commonRoutes}
+                onChange={(e) => setTechniques((t) => ({ ...t, commonRoutes: e.target.checked }))}
+                disabled={isDisabled}
+              />
+              <span className="discover-tech-name">Common routes</span>
+              <span className="discover-tech-desc">
+                Probe a list of standard SaaS paths (<code>/dashboard</code>, <code>/settings</code>
+                , <code>/billing</code>, …). Filters 404s.
+              </span>
+            </label>
+            <label className="discover-tech-row discover-tech-disabled">
+              <input
+                type="checkbox"
+                checked={false}
+                disabled={true}
+                aria-disabled="true"
+                onChange={() => undefined}
+              />
+              <span className="discover-tech-name">Nav-click</span>
+              <span className="discover-tech-desc">
+                <em>Coming in v0.2.x</em> — click buttons inside <code>&lt;nav&gt;</code> / header
+                to surface React-Router routes that aren't real anchors.
+              </span>
+            </label>
+          </fieldset>
         </div>
       </section>
 
@@ -1359,7 +1451,10 @@ function DiscoverPanel({
               />
               <span className="discover-path">{r.path}</span>
               {r.title && <span className="discover-title">{r.title}</span>}
-              <span className="discover-depth">d{r.depth}</span>
+              <span className={`discover-source discover-source-${r.source}`}>
+                {SOURCE_LABELS[r.source] ?? r.source}
+              </span>
+              {r.source === "link" && <span className="discover-depth">d{r.depth}</span>}
             </label>
           </li>
         ))}
@@ -1377,6 +1472,13 @@ function DiscoverPanel({
     </div>
   );
 }
+
+const SOURCE_LABELS: Record<DiscoverSource, string> = {
+  link: "link",
+  sitemap: "sitemap",
+  common: "common",
+  nav: "nav",
+};
 
 function normalizeRoute(r: string): string {
   let s = r.trim();

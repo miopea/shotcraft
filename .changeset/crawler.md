@@ -44,3 +44,21 @@ templates. Reload, close-and-reopen, or come back tomorrow and it's
 all there. A "Forget saved settings" link in the page header clears
 everything. Captures and renders still live in the tab only — those
 move to IndexedDB in a later release.
+
+**Discovery v2** lands two new toggleable techniques alongside the
+existing link crawl:
+
+- **Sitemap.xml** — fetches `/sitemap.xml` through the page's
+  post-auth context, parses `<loc>` entries. Cheap and authoritative
+  when present.
+- **Common routes** — probes a list of standard SaaS paths
+  (`/dashboard`, `/settings`, `/billing`, `/about`, …). Includes an
+  SPA-shell filter: if more than half the 200 responses share an
+  identical body length, that length is the catch-all shell and
+  those bogus matches are dropped. Real multi-page sites keep all
+  their distinct hits.
+
+Each technique has its own checkbox in Step 1; results in the
+picker get a colored source badge (link/sitemap/common). Nav-click
+discovery is stubbed in the UI as "Coming in v0.2.x" — same
+machinery as modal-state crawl, ships as a follow-up.

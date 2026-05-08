@@ -18,7 +18,11 @@
  */
 
 import { Router } from "express";
-import { discoverRoutes, type RenderDemoAuth } from "../render-demo-engine.js";
+import {
+  discoverRoutes,
+  type DiscoverTechniques,
+  type RenderDemoAuth,
+} from "../render-demo-engine.js";
 
 export const discoverRouter: Router = Router();
 
@@ -60,10 +64,16 @@ discoverRouter.post("/", (req, res) => {
     return;
   }
 
+  const techniques =
+    body.techniques && typeof body.techniques === "object"
+      ? (body.techniques as DiscoverTechniques)
+      : undefined;
+
   void discoverRoutes({
     url: typeof body.url === "string" ? body.url : "",
     ...(typeof body.maxDepth === "number" ? { maxDepth: body.maxDepth } : {}),
     ...(typeof body.maxPages === "number" ? { maxPages: body.maxPages } : {}),
+    ...(techniques ? { techniques } : {}),
     ...(auth ? { auth } : {}),
   })
     .then((result) => {
