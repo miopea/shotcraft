@@ -24,8 +24,13 @@ jobs:
         # root has no `playwright` dep, so plain `pnpm exec` errors with
         # "Command playwright not found").
         run: pnpm --filter @shotcraft/web exec playwright install --with-deps chromium
+      # `pnpm build` first because `examples/budgetbug` typechecks
+      # against shotcraft's built typings (dist/), and template packages
+      # build to dist/ that downstream consumers reference. If we
+      # typecheck before build, those imports resolve to "Cannot find
+      # module 'shotcraft'".
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
-      - run: pnpm build
       - run: pnpm test
