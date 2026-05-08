@@ -767,16 +767,24 @@ async function validateUrl(raw: string): Promise<{ ok: true } | RenderDemoFailur
     return { ok: false, status: 400, error: "`url` must be http:// or https://." };
   }
 
+  // Local mode (`shotcraft web` launched the server) is the operator
+  // running this on their own machine — localhost / RFC1918 are valid
+  // capture targets. Public deployments still get the SSRF guard.
+  const allowLocal = process.env.SHOTCRAFT_ALLOW_LOCAL === "1";
+
   const host = parsed.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost") || host === "metadata.google.internal") {
-    return { ok: false, status: 400, error: "Localhost / metadata hosts not allowed." };
+  if (host === "metadata.google.internal") {
+    return { ok: false, status: 400, error: "Cloud metadata hosts not allowed." };
+  }
+  if (!allowLocal && (host === "localhost" || host.endsWith(".localhost"))) {
+    return { ok: false, status: 400, error: "Localhost not allowed in hosted mode." };
   }
 
   // Resolve to verify no private IPs. If DNS fails, let the actual fetch
   // surface the error rather than silently hiding it here.
   try {
     const { address } = await dnsLookup(host);
-    if (isPrivateIp(address)) {
+    if (!allowLocal && isPrivateIp(address)) {
       return {
         ok: false,
         status: 400,

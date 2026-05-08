@@ -62,3 +62,18 @@ Each technique has its own checkbox in Step 1; results in the
 picker get a colored source badge (link/sitemap/common). Nav-click
 discovery is stubbed in the UI as "Coming in v0.2.x" — same
 machinery as modal-state crawl, ships as a follow-up.
+
+**`shotcraft web` local mode** — `pnpm shotcraft web` (or `npx
+shotcraft web` after install) boots the same hosted-companion UI on
+`localhost:3002` against your project. The Crawler reads + writes
+`./shotcraft.config.json` in cwd via two new endpoints
+(`GET/PUT /api/local/config`); changes auto-save on every edit so
+your config file IS the saved state. Local mode also enables
+localhost / RFC1918 capture targets (`http://localhost:5173` works)
+and skips the bearer-token gate (it's your own machine). The
+hosted deployment never mounts these endpoints — local-mode is
+gated by an env var the CLI sets and the App Service doesn't.
+
+In the Crawler header, when local mode is active, a green badge
+shows the bound config path so you know edits go to disk and not
+just the browser.

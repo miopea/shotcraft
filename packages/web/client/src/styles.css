@@ -818,6 +818,16 @@ label {
   color: var(--accent);
 }
 
+.local-mode-badge {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--accent);
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+}
+
 /* Discovery technique toggles (Step 1) */
 
 .discovery-techniques {

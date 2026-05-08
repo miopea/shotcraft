@@ -189,6 +189,11 @@ export function Crawler() {
 
   // Persist on change. Debounced 500ms so typing into a caption field
   // doesn't write 30 times.
+  //
+  // Hosted: localStorage is the only persistence (browser-local).
+  // Local mode (shotcraft web): PUT to /api/local/config which writes
+  // shotcraft.config.json on disk. We also still write localStorage as
+  // a fallback so dev/server reloads don't lose work.
   useEffect(() => {
     const handle = setTimeout(() => {
       const session: PersistedSession = {
@@ -205,7 +210,16 @@ export function Crawler() {
         localStorage.setItem(PERSIST_KEY, JSON.stringify(session));
       } catch {
         // localStorage throws when full or in some private-browsing modes.
-        // The user just loses persistence for this session.
+      }
+      if (health?.localMode) {
+        void fetch("/api/local/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config: session }),
+        }).catch(() => {
+          // Quiet — the next debounce will retry. The user sees no
+          // dialog because every keystroke would otherwise spam errors.
+        });
       }
     }, 500);
     return () => clearTimeout(handle);
@@ -218,6 +232,7 @@ export function Crawler() {
     auth,
     renderTemplateIds,
     techniques,
+    health?.localMode,
   ]);
 
   const forgetAll = (): void => {
@@ -240,13 +255,43 @@ export function Crawler() {
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json() as Promise<HealthResponse>)
-      .then(setHealth)
+      .then((h) => {
+        setHealth(h);
+        // Local mode (`shotcraft web` launched the server) — the server
+        // owns persistence via shotcraft.config.json on disk. Hydrate
+        // from the file once; subsequent state changes PUT back.
+        if (h.localMode) {
+          fetch("/api/local/config")
+            .then((r) => r.json() as Promise<{ config: PersistedSession | null }>)
+            .then((d) => {
+              if (d.config && typeof d.config === "object") {
+                applyPersisted(d.config);
+              }
+            })
+            .catch(() => {
+              // File missing on first run is fine — Crawler keeps the
+              // localStorage-hydrated defaults until the user edits
+              // something, then saves to disk.
+            });
+        }
+      })
       .catch(() => setHealth(null));
     fetch("/api/templates")
       .then((r) => r.json() as Promise<TemplatesResponse>)
       .then((d) => setTemplates(d.templates))
       .catch(() => setTemplates([]));
   }, []);
+
+  const applyPersisted = (s: Partial<PersistedSession>): void => {
+    if (typeof s.token === "string") setToken(s.token);
+    if (typeof s.target === "string") setTarget(s.target);
+    if (Array.isArray(s.screens) && s.screens.length > 0) setScreens(s.screens);
+    if (typeof s.captureTemplateId === "string") setCaptureTemplateId(s.captureTemplateId);
+    if (s.captureTheme === "dark" || s.captureTheme === "light") setCaptureTheme(s.captureTheme);
+    if (s.auth) setAuth(s.auth);
+    if (Array.isArray(s.renderTemplateIds)) setRenderTemplateIds(new Set(s.renderTemplateIds));
+    if (s.techniques) setTechniques(s.techniques);
+  };
 
   const isDisabled = health !== null && !health.liveDemoEnabled;
 
@@ -578,6 +623,11 @@ export function Crawler() {
     <section className="container">
       <div className="crawler-header">
         <h1>Crawler</h1>
+        {health?.localMode && health.configPath && (
+          <span className="local-mode-badge" title="shotcraft web is running locally">
+            ⟳ {health.configPath.split("/").slice(-2).join("/")}
+          </span>
+        )}
         <button
           type="button"
           className="link-btn"
@@ -589,8 +639,14 @@ export function Crawler() {
       </div>
       <p className="lede">
         Define your screens, capture them all in one go (with target-app login if you have one),
-        tweak captions in place, then render through whichever templates you want. Settings persist
-        in this browser; captures and renders stay in this tab only.
+        tweak captions in place, then render through whichever templates you want.{" "}
+        {health?.localMode ? (
+          <>
+            <strong>Local mode:</strong> changes save to <code>shotcraft.config.json</code> on disk.
+          </>
+        ) : (
+          <>Settings persist in this browser; captures and renders stay in this tab only.</>
+        )}
       </p>
 
       {isDisabled && (

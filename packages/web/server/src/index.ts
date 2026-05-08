@@ -27,10 +27,12 @@ import { renderDemoRouter } from "./routes/render-demo.js";
 import { captureRouter } from "./routes/capture.js";
 import { renderRouter } from "./routes/render.js";
 import { discoverRouter } from "./routes/discover.js";
+import { localConfigRouter, LOCAL_CONFIG_PATH } from "./routes/local-config.js";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3002);
 const LIVE_DEMO_ENABLED = process.env.SHOTCRAFT_LIVE_DEMO === "1";
+const LOCAL_MODE = process.env.SHOTCRAFT_WEB_LOCAL_MODE === "1";
 
 app.use(express.json({ limit: "1mb" }));
 
@@ -39,6 +41,7 @@ app.get("/api/health", (_req, res) => {
     status: "ok",
     liveDemoEnabled: LIVE_DEMO_ENABLED,
     version: "0.0.0",
+    ...(LOCAL_MODE ? { localMode: true, configPath: LOCAL_CONFIG_PATH } : {}),
   });
 });
 
@@ -47,6 +50,11 @@ app.use("/api/render-demo", renderDemoRouter);
 app.use("/api/capture", captureRouter);
 app.use("/api/render", renderRouter);
 app.use("/api/discover", discoverRouter);
+// Local-config endpoints — mounted only when shotcraft web launched the
+// server with a project root. Host deployments never expose these.
+if (LOCAL_MODE) {
+  app.use("/api/local/config", localConfigRouter);
+}
 
 // In production, serve the Vite-built client. In dev, the Vite dev server
 // runs separately on its own port and proxies /api to here.
