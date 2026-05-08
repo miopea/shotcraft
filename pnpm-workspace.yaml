@@ -1,0 +1,8 @@
+packages:
+  - "packages/*"
+  - "examples/*"
+  - "docs"
+allowBuilds:
+  # esbuild needs to compile its native binary at install time. Required for
+  # tsup (used by all packages to bundle their TypeScript).
+  esbuild: true

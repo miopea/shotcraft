@@ -1,0 +1,57 @@
+{
+  "name": "shotcraft",
+  "version": "0.0.0",
+  "description": "Capture your live app and ship App Store-ready screenshots, README hero images, and social cards in one command.",
+  "keywords": [
+    "screenshot",
+    "app-store",
+    "play-store",
+    "fastlane",
+    "playwright",
+    "marketing",
+    "readme"
+  ],
+  "homepage": "https://shotcraft.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shotcraft/shotcraft.git",
+    "directory": "packages/core"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js"
+    }
+  },
+  "bin": {
+    "shotcraft": "./dist/cli/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsup": "^8.2.4",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
