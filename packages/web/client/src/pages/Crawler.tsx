@@ -989,6 +989,12 @@ export function Crawler() {
 
         <DiscoverPanel
           state={discoverState}
+          authMode={auth.mode}
+          authHasCredentials={
+            auth.email.trim().length > 0 ||
+            auth.password.length > 0 ||
+            auth.cookiesJson.trim().length > 0
+          }
           onTogglePath={toggleDiscoverPick}
           onSelectAll={() => setDiscoverPickAll(true)}
           onSelectNone={() => setDiscoverPickAll(false)}
@@ -1623,6 +1629,8 @@ function ActionFields({ action, update, disabled }: ActionFieldsProps) {
 
 interface DiscoverPanelProps {
   state: DiscoverState;
+  authMode: AuthMode;
+  authHasCredentials: boolean;
   onTogglePath: (path: string) => void;
   onSelectAll: () => void;
   onSelectNone: () => void;
@@ -1632,6 +1640,8 @@ interface DiscoverPanelProps {
 
 function DiscoverPanel({
   state,
+  authMode,
+  authHasCredentials,
   onTogglePath,
   onSelectAll,
   onSelectNone,
@@ -1659,8 +1669,28 @@ function DiscoverPanel({
   }
   const total = state.routes.length;
   const picked = state.selected.size;
+
+  // Detect "stuck on the public landing" — if discover only found a
+  // login page + maybe the landing root, the user probably hit auth
+  // they didn't (or couldn't) solve. Surface a specific hint.
+  const looksStuckOnLogin =
+    total > 0 && total <= 3 && state.routes.some((r) => /[/?]login|signin|sign-in/i.test(r.path));
+  const authNoneButCredsFilled = authMode === "none" && authHasCredentials;
+  const hint = looksStuckOnLogin
+    ? authNoneButCredsFilled
+      ? "Credentials are filled but Auth mode is set to “None”. Switch to “form” in Step 1's auth section so login runs before discovery."
+      : authMode === "none"
+        ? "Discovery hit a login wall. Configure form auth in Step 1 (URL, email, password, selectors) so discovery can log in and crawl the authenticated UI."
+        : null
+    : null;
+
   return (
     <div className="discover-panel discover-panel-ready">
+      {hint && (
+        <div className="discover-panel-hint" role="note">
+          <strong>Tip:</strong> {hint}
+        </div>
+      )}
       <header className="discover-panel-header">
         <strong>
           Discovered {total} route{total === 1 ? "" : "s"}

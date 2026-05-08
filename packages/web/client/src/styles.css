@@ -1047,6 +1047,21 @@ label {
   flex-wrap: wrap;
 }
 
+.discover-panel-hint {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fbbf24;
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.discover-panel-hint strong {
+  color: #fbbf24;
+}
+
 .discover-panel-header {
   display: flex;
   align-items: center;

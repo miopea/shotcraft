@@ -734,6 +734,30 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
         : page.waitForLoadState("networkidle", { timeout: 15_000 });
     await clickFirstMatch(page, "submit", auth.submitButton, SUBMIT_FALLBACK_SELECTORS);
     await wait;
+
+    // Detect silent auth failure: if we're still on the login URL OR
+    // there's still a password field on the page, the submit didn't
+    // succeed. Throwing here means the user sees a clear error
+    // instead of a confusing empty discover/capture result later.
+    const afterUrl = page.url();
+    const stillOnLogin =
+      afterUrl === formUrl ||
+      new URL(afterUrl).pathname === new URL(formUrl).pathname ||
+      /[/?]login/i.test(afterUrl);
+    if (stillOnLogin) {
+      const hasPasswordField = await page
+        .locator('input[type="password"]')
+        .count()
+        .catch(() => 0);
+      if (hasPasswordField > 0) {
+        throw new Error(
+          `auth (form): submitted login but page is still on ${new URL(afterUrl).pathname} ` +
+            `with a password field present. Credentials likely rejected, or the submit button ` +
+            `selector didn't fire the form. Check email/password values + the "submit button" ` +
+            `selector in Step 1.`,
+        );
+      }
+    }
     return;
   }
 
