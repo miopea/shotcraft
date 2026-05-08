@@ -178,16 +178,141 @@ packages, and the publish fails.
 All seven publishable packages (`shotcraft` + the six
 `@shotcraft/template-*`) ship `publishConfig: { access: "public", provenance: true }`.
 
-## Deploying the docs site
+## Azure deployment (current)
 
-The docs site is a static Astro Starlight build:
+Both Azure surfaces are live in the operator's `bfg-solutions` resource
+group (eastus2). Free temporary URLs work today; `shotcraft.dev`
+custom domains land when the apex is purchased.
+
+| Resource             | Type                        | URL                                                    |
+| -------------------- | --------------------------- | ------------------------------------------------------ |
+| `bfg-solutions-plan` | App Service Plan (B1 Linux) | — (hosts shotcraft-web)                                |
+| `shotcraft-web`      | App Service Linux           | https://shotcraft-web.azurewebsites.net                |
+| `shotcraft-docs`     | Static Web App              | https://ambitious-sand-0f2523b0f.7.azurestaticapps.net |
+
+`SHOTCRAFT_LIVE_DEMO` is **off** in production — the live-demo
+endpoint returns 403 with a "run locally" pointer. App Service B1's
+1.75 GB RAM doesn't comfortably host headless Chromium; if live-demo
+ever needs to run in the cloud, migrate to Azure Container Apps with
+a Playwright-bearing Dockerfile.
+
+### How they were created
 
 ```bash
-pnpm --filter @shotcraft/docs build
-# Output: docs/dist/
+# App Service Plan + Web App
+az appservice plan create \
+  -g bfg-solutions -n bfg-solutions-plan \
+  --is-linux --sku B1 --location eastus2
+
+az webapp create \
+  -g bfg-solutions -n shotcraft-web \
+  -p bfg-solutions-plan --runtime "NODE:22-lts"
+
+az webapp config set \
+  -g bfg-solutions -n shotcraft-web \
+  --startup-file "node server/dist/index.js"
+
+az webapp config appsettings set \
+  -g bfg-solutions -n shotcraft-web \
+  --settings NODE_ENV=production \
+             WEBSITE_NODE_DEFAULT_VERSION=22 \
+             SCM_DO_BUILD_DURING_DEPLOYMENT=false
+
+# Static Web App (free tier)
+az staticwebapp create \
+  -g bfg-solutions -n shotcraft-docs \
+  --location eastus2 --sku Free
 ```
 
-### Cloudflare Pages (recommended)
+### Manual deploy (one-off)
+
+```bash
+# Docs → SWA
+pnpm --filter @shotcraft/docs build
+SWA_TOKEN=$(az staticwebapp secrets list \
+  -g bfg-solutions -n shotcraft-docs \
+  --query properties.apiKey -o tsv)
+npx --yes @azure/static-web-apps-cli deploy docs/dist \
+  --deployment-token "$SWA_TOKEN" --env production --no-use-keychain
+
+# @shotcraft/web → App Service.
+# App Service can't consume our pnpm workspace directly, so stage a
+# self-contained bundle (server/dist + dist/client + minimal
+# package.json + npm-installed node_modules), zip it, and push.
+pnpm --filter @shotcraft/web build
+DEPLOY=/tmp/shotcraft-web-deploy
+rm -rf "$DEPLOY" && mkdir -p "$DEPLOY/server" "$DEPLOY/dist"
+cp -r packages/web/server/dist  "$DEPLOY/server/dist"
+cp -r packages/web/dist/client  "$DEPLOY/dist/client"
+cat > "$DEPLOY/package.json" <<'EOF'
+{
+  "name": "shotcraft-web-deploy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "server/dist/index.js",
+  "scripts": { "start": "node server/dist/index.js" },
+  "dependencies": { "express": "^5.0.0" },
+  "engines": { "node": ">=20" }
+}
+EOF
+(cd "$DEPLOY" && npm install --omit=dev --silent)
+(cd "$DEPLOY" && zip -rq /tmp/shotcraft-web.zip .)
+az webapp deploy \
+  -g bfg-solutions -n shotcraft-web \
+  --src-path /tmp/shotcraft-web.zip --type zip
+```
+
+### Automated deploy (GitHub Actions)
+
+[`.github/workflows/deploy-azure.yml`](./.github/workflows/deploy-azure.yml)
+runs both deploys on push to `main`. Two repo secrets are required:
+
+```bash
+# SWA deployment token
+gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --body "$(
+  az staticwebapp secrets list \
+    -g bfg-solutions -n shotcraft-docs \
+    --query properties.apiKey -o tsv
+)"
+
+# App Service publish profile (XML)
+gh secret set AZURE_WEBAPP_PUBLISH_PROFILE --body "$(
+  az webapp deployment list-publishing-profiles \
+    -g bfg-solutions -n shotcraft-web --xml
+)"
+```
+
+The workflow is currently dormant (no GitHub repo yet); it activates as
+soon as `miopea/shotcraft` lands.
+
+### Custom domain (Cloudflare-managed)
+
+`bfgsolutions.net` DNS lives at Cloudflare. To put the docs site at
+`shotcraft.bfgsolutions.net`:
+
+1. **In Cloudflare**, add a `CNAME` record:
+   - Name: `shotcraft`
+   - Target: `ambitious-sand-0f2523b0f.7.azurestaticapps.net`
+   - Proxy status: **DNS only** (Azure handles SSL).
+2. **Then run**:
+   ```bash
+   az staticwebapp hostname set \
+     -g bfg-solutions -n shotcraft-docs \
+     --hostname shotcraft.bfgsolutions.net \
+     --validation-method cname-delegation
+   ```
+3. SSL provisions automatically; takes ~5 minutes.
+
+When `shotcraft.dev` is purchased, repeat the same flow against the new
+apex (use `--validation-method dns-txt-token` for the apex via Azure DNS,
+or keep CF and use `cname-delegation` for `www.shotcraft.dev`).
+
+### Cloudflare Pages (alternative for docs)
+
+If you ever decouple from Azure for the docs site, Cloudflare Pages
+works fine — it has tighter Astro tooling. Keep this as a fallback,
+not a primary plan, while the BFG/Azure setup is already paid for.
 
 ```bash
 # In the Cloudflare dashboard:
@@ -197,42 +322,25 @@ pnpm --filter @shotcraft/docs build
 #    - Framework preset: Astro
 #    - Build command: pnpm install && pnpm --filter @shotcraft/docs build
 #    - Build output directory: docs/dist
-#    - Root directory: (leave blank)
 #    - Environment variables:
 #        NODE_VERSION=20
-#        NPM_FLAGS=--version    # disables Cloudflare's npm install
-# 4. Custom domain: shotcraft.dev (CNAME flattening handles the apex)
 ```
-
-### Netlify (alternative)
-
-```toml
-# netlify.toml at the repo root
-[build]
-  command = "pnpm install && pnpm --filter @shotcraft/docs build"
-  publish = "docs/dist"
-
-[build.environment]
-  NODE_VERSION = "20"
-```
-
-## Hosted companion (`@shotcraft/web`)
-
-The hosted companion is currently scaffolded in
-[`packages/web/`](./packages/web). Phase 8 builds out the templates
-gallery, config builder, and live-demo UI on top of that scaffold.
-Deployment to Azure App Service is planned but not yet wired.
 
 ## Status
 
-| Prerequisite                  | Status             |
-| ----------------------------- | ------------------ |
-| `@shotcraft` npm scope        | 🟡 Operator action |
-| `miopea/shotcraft` GitHub | 🟡 Operator action |
-| `NPM_TOKEN` GitHub secret     | 🟡 Operator action |
-| `shotcraft.dev` domain        | 🟡 Operator action |
-| `release.yml` workflow        | ✅ Wired           |
-| `ci.yml` workflow             | ✅ Wired           |
-| Changesets configured         | ✅ Wired           |
-| `publishConfig` on packages   | ✅ Wired           |
-| Cloudflare Pages / Netlify    | 🟡 Operator action |
+| Prerequisite                          | Status               |
+| ------------------------------------- | -------------------- |
+| `@shotcraft` npm scope                | 🟡 Operator action   |
+| `miopea/shotcraft` GitHub repo    | 🟡 Operator action   |
+| `NPM_TOKEN` GitHub secret             | 🟡 Operator action   |
+| `shotcraft.dev` domain                | 🟡 Operator action   |
+| `release.yml` workflow                | ✅ Wired             |
+| `ci.yml` workflow                     | ✅ Wired             |
+| `deploy-azure.yml` workflow           | ✅ Wired             |
+| Changesets configured                 | ✅ Wired             |
+| `publishConfig` on packages           | ✅ Wired             |
+| `bfg-solutions-plan` App Service Plan | ✅ Provisioned       |
+| `shotcraft-web` App Service           | ✅ Live + deployed   |
+| `shotcraft-docs` Static Web App       | ✅ Live + deployed   |
+| `shotcraft.bfgsolutions.net` CNAME    | 🟡 Cloudflare action |
+| `AZURE_*` GitHub secrets              | 🟡 Operator action   |

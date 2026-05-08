@@ -1,0 +1,93 @@
+name: Deploy to Azure
+
+# Builds + deploys both Shotcraft Azure surfaces on push to main:
+#   - @shotcraft/docs   → Azure Static Web Apps (free tier)
+#   - @shotcraft/web    → Azure App Service Linux B1 (Node 22)
+#
+# Two secrets must be set on the repo:
+#   AZURE_STATIC_WEB_APPS_API_TOKEN — `az staticwebapp secrets list -g bfg-solutions -n shotcraft-docs --query properties.apiKey -o tsv`
+#   AZURE_WEBAPP_PUBLISH_PROFILE   — `az webapp deployment list-publishing-profiles -g bfg-solutions -n shotcraft-web --xml`
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-azure-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-docs:
+    name: Deploy @shotcraft/docs → SWA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build docs site
+        run: pnpm --filter @shotcraft/docs build
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: docs/dist
+          skip_app_build: true
+          skip_api_build: true
+
+  deploy-web:
+    name: Deploy @shotcraft/web → App Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build @shotcraft/web
+        run: pnpm --filter @shotcraft/web build
+      - name: Stage deploy bundle
+        # App Service needs a self-contained deploy directory with non-workspace
+        # node_modules. Stage server/dist + dist/client + a minimal package.json
+        # then `npm install --omit=dev` to materialize a clean node_modules.
+        run: |
+          set -euo pipefail
+          DEPLOY="$RUNNER_TEMP/shotcraft-web-deploy"
+          rm -rf "$DEPLOY" && mkdir -p "$DEPLOY/server" "$DEPLOY/dist"
+          cp -r packages/web/server/dist "$DEPLOY/server/dist"
+          cp -r packages/web/dist/client "$DEPLOY/dist/client"
+          cat > "$DEPLOY/package.json" <<'EOF'
+          {
+            "name": "shotcraft-web-deploy",
+            "version": "0.0.0",
+            "private": true,
+            "type": "module",
+            "main": "server/dist/index.js",
+            "scripts": { "start": "node server/dist/index.js" },
+            "dependencies": { "express": "^5.0.0" },
+            "engines": { "node": ">=20" }
+          }
+          EOF
+          (cd "$DEPLOY" && npm install --omit=dev --silent)
+          echo "DEPLOY_DIR=$DEPLOY" >> "$GITHUB_ENV"
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: shotcraft-web
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ env.DEPLOY_DIR }}
