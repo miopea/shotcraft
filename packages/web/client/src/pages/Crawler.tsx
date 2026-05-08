@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { HealthResponse, TemplateInfo, TemplatesResponse } from "../types.js";
+import {
+  STORE_CAPTURES,
+  STORE_COMPOSITES,
+  clearStore,
+  deleteByPrefix,
+  getAllEntries,
+  putBlob,
+  mediaKey,
+} from "../persistence/idb.js";
 
 type AuthMode = "none" | "api" | "form" | "session";
 
@@ -74,9 +83,44 @@ interface ScreenComposite {
 }
 
 interface CaptureProgress {
-  inputId: string;
+  /** key = mediaKey(screenId, templateId, theme) */
   status: "queued" | "running" | "done" | "error";
   error?: string;
+}
+
+/**
+ * A matrix cell — the (template, theme) coordinate the user wants
+ * captures for. The full matrix is `screens × cells` raws; `cells` is
+ * stored as a Set of `${templateId}::${theme}` strings.
+ */
+function cellKey(templateId: string, theme: "dark" | "light"): string {
+  return `${templateId}::${theme}`;
+}
+function parseCellKey(key: string): { templateId: string; theme: "dark" | "light" } | null {
+  const idx = key.lastIndexOf("::");
+  if (idx <= 0) return null;
+  const templateId = key.slice(0, idx);
+  const theme = key.slice(idx + 2);
+  if (theme !== "dark" && theme !== "light") return null;
+  return { templateId, theme };
+}
+
+/**
+ * Parses a `${screenId}::${templateId}::${theme}` media key into its
+ * three parts. Mirrors mediaKey() in persistence/idb.ts. Used during
+ * IDB hydration to rebuild in-memory state from blobs alone.
+ */
+function parseMediaKey(
+  key: string,
+): { screenId: string; templateId: string; theme: "dark" | "light" } | null {
+  const parts = key.split("::");
+  if (parts.length < 3) return null;
+  const theme = parts[parts.length - 1];
+  if (theme !== "dark" && theme !== "light") return null;
+  const screenId = parts[0]!;
+  const templateId = parts.slice(1, -1).join("::");
+  if (!screenId || !templateId) return null;
+  return { screenId, templateId, theme };
 }
 
 type DiscoverSource = "link" | "sitemap" | "common" | "nav";
@@ -133,11 +177,14 @@ interface PersistedSession {
   token: string;
   target: string;
   screens: ScreenInput[];
-  captureTemplateId: string;
-  captureTheme: "dark" | "light";
+  /** Matrix cells, e.g. ["app-store-iphone::dark", "readme-hero::dark"]. */
+  matrix: string[];
   auth: AuthState;
-  renderTemplateIds: string[];
   techniques: DiscoverTechniques;
+  /** v1.x compat — older sessions stored these. */
+  captureTemplateId?: string;
+  captureTheme?: "dark" | "light";
+  renderTemplateIds?: string[];
 }
 
 function loadPersisted(): Partial<PersistedSession> {
@@ -165,21 +212,26 @@ export function Crawler() {
   const [screens, setScreens] = useState<ScreenInput[]>(
     initial.screens && initial.screens.length > 0 ? initial.screens : DEFAULT_SCREENS.slice(),
   );
-  const [captureTemplateId, setCaptureTemplateId] = useState(
-    initial.captureTemplateId ?? "readme-hero",
-  );
-  const [captureTheme, setCaptureTheme] = useState<"dark" | "light">(
-    initial.captureTheme === "light" ? "light" : "dark",
-  );
+  const [matrix, setMatrix] = useState<Set<string>>(() => {
+    if (Array.isArray(initial.matrix) && initial.matrix.length > 0) {
+      return new Set(initial.matrix);
+    }
+    // v1 compat: migrate captureTemplateId + captureTheme to a single cell.
+    if (
+      initial.captureTemplateId &&
+      (initial.captureTheme === "dark" || initial.captureTheme === "light")
+    ) {
+      return new Set([cellKey(initial.captureTemplateId, initial.captureTheme)]);
+    }
+    return new Set([cellKey("readme-hero", "dark")]);
+  });
   const [auth, setAuth] = useState<AuthState>(initial.auth ?? DEFAULT_AUTH);
 
+  // Captures + composites keyed by mediaKey(screenId, templateId, theme).
   const [captures, setCaptures] = useState<Record<string, ScreenCapture>>({});
   const [progress, setProgress] = useState<Record<string, CaptureProgress>>({});
-  const [composites, setComposites] = useState<ScreenComposite[]>([]);
+  const [composites, setComposites] = useState<Record<string, ScreenComposite>>({});
 
-  const [renderTemplateIds, setRenderTemplateIds] = useState<Set<string>>(
-    () => new Set(initial.renderTemplateIds ?? ["readme-hero"]),
-  );
   const [renderingAll, setRenderingAll] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [discoverState, setDiscoverState] = useState<DiscoverState>({ status: "idle" });
@@ -200,10 +252,8 @@ export function Crawler() {
         token,
         target,
         screens,
-        captureTemplateId,
-        captureTheme,
+        matrix: Array.from(matrix),
         auth,
-        renderTemplateIds: Array.from(renderTemplateIds),
         techniques,
       };
       try {
@@ -223,33 +273,29 @@ export function Crawler() {
       }
     }, 500);
     return () => clearTimeout(handle);
-  }, [
-    token,
-    target,
-    screens,
-    captureTemplateId,
-    captureTheme,
-    auth,
-    renderTemplateIds,
-    techniques,
-    health?.localMode,
-  ]);
+  }, [token, target, screens, matrix, auth, techniques, health?.localMode]);
 
   const forgetAll = (): void => {
-    if (!window.confirm("Forget all saved settings (token, target, auth, screens)?")) return;
+    if (!window.confirm("Forget all saved settings, captures, and composites?")) return;
     try {
       localStorage.removeItem(PERSIST_KEY);
     } catch {
       // Best-effort.
     }
+    // Drop in-memory blob URLs to free memory.
+    for (const c of Object.values(captures)) URL.revokeObjectURL(c.rawBlobUrl);
+    for (const c of Object.values(composites)) URL.revokeObjectURL(c.pngBlobUrl);
+    void clearStore(STORE_CAPTURES);
+    void clearStore(STORE_COMPOSITES);
     setToken("");
     setTarget("https://shotcraft.bfgsolutions.net");
     setScreens(DEFAULT_SCREENS.slice());
-    setCaptureTemplateId("readme-hero");
-    setCaptureTheme("dark");
+    setMatrix(new Set([cellKey("readme-hero", "dark")]));
     setAuth(DEFAULT_AUTH);
-    setRenderTemplateIds(new Set(["readme-hero"]));
     setTechniques(DEFAULT_TECHNIQUES);
+    setCaptures({});
+    setComposites({});
+    setProgress({});
   };
 
   useEffect(() => {
@@ -282,20 +328,79 @@ export function Crawler() {
       .catch(() => setTemplates([]));
   }, []);
 
+  // Hydrate captures + composites from IndexedDB once on mount. The
+  // composite key tells us screenId / templateId / theme, so we can
+  // rebuild the in-memory state from blobs alone.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [capEntries, compEntries] = await Promise.all([
+          getAllEntries(STORE_CAPTURES),
+          getAllEntries(STORE_COMPOSITES),
+        ]);
+        if (cancelled) return;
+
+        const capMap: Record<string, ScreenCapture> = {};
+        for (const [key, blob] of capEntries) {
+          const parsed = parseMediaKey(key);
+          if (!parsed) continue;
+          const buf = await blob.arrayBuffer();
+          if (cancelled) return;
+          capMap[key] = {
+            inputId: parsed.screenId,
+            rawBlobUrl: URL.createObjectURL(blob),
+            rawBase64: bufferToBase64(buf),
+            capturedAt: 0,
+            templateId: parsed.templateId,
+            theme: parsed.theme,
+          };
+        }
+        const compMap: Record<string, ScreenComposite> = {};
+        for (const [key, blob] of compEntries) {
+          const parsed = parseMediaKey(key);
+          if (!parsed) continue;
+          compMap[key] = {
+            inputId: parsed.screenId,
+            templateId: parsed.templateId,
+            theme: parsed.theme,
+            pngBlobUrl: URL.createObjectURL(blob),
+            renderedAt: 0,
+          };
+        }
+        if (cancelled) return;
+        if (Object.keys(capMap).length > 0) setCaptures(capMap);
+        if (Object.keys(compMap).length > 0) setComposites(compMap);
+      } catch {
+        // IDB unavailable (private browsing, quota error). Crawler
+        // still works — it just won't survive reload.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const applyPersisted = (s: Partial<PersistedSession>): void => {
     if (typeof s.token === "string") setToken(s.token);
     if (typeof s.target === "string") setTarget(s.target);
     if (Array.isArray(s.screens) && s.screens.length > 0) setScreens(s.screens);
-    if (typeof s.captureTemplateId === "string") setCaptureTemplateId(s.captureTemplateId);
-    if (s.captureTheme === "dark" || s.captureTheme === "light") setCaptureTheme(s.captureTheme);
+    if (Array.isArray(s.matrix)) setMatrix(new Set(s.matrix));
     if (s.auth) setAuth(s.auth);
-    if (Array.isArray(s.renderTemplateIds)) setRenderTemplateIds(new Set(s.renderTemplateIds));
     if (s.techniques) setTechniques(s.techniques);
   };
 
   const isDisabled = health !== null && !health.liveDemoEnabled;
 
-  const captureTemplate = templates.find((t) => t.id === captureTemplateId) ?? templates[0] ?? null;
+  const toggleMatrixCell = (templateId: string, theme: "dark" | "light"): void => {
+    const k = cellKey(templateId, theme);
+    setMatrix((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  };
 
   const updateScreen = (id: string, patch: Partial<ScreenInput>) => {
     setScreens((s) => s.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -402,17 +507,36 @@ export function Crawler() {
   const removeScreen = (id: string) => {
     setScreens((s) => s.filter((row) => row.id !== id));
     setCaptures((c) => {
-      const next = { ...c };
-      const cap = next[id];
-      if (cap) URL.revokeObjectURL(cap.rawBlobUrl);
-      delete next[id];
+      const next: Record<string, ScreenCapture> = {};
+      for (const [k, v] of Object.entries(c)) {
+        if (k.startsWith(`${id}::`)) {
+          URL.revokeObjectURL(v.rawBlobUrl);
+        } else {
+          next[k] = v;
+        }
+      }
+      return next;
+    });
+    setComposites((c) => {
+      const next: Record<string, ScreenComposite> = {};
+      for (const [k, v] of Object.entries(c)) {
+        if (k.startsWith(`${id}::`)) {
+          URL.revokeObjectURL(v.pngBlobUrl);
+        } else {
+          next[k] = v;
+        }
+      }
       return next;
     });
     setProgress((p) => {
-      const next = { ...p };
-      delete next[id];
+      const next: Record<string, CaptureProgress> = {};
+      for (const [k, v] of Object.entries(p)) {
+        if (!k.startsWith(`${id}::`)) next[k] = v;
+      }
       return next;
     });
+    void deleteByPrefix(STORE_CAPTURES, `${id}::`);
+    void deleteByPrefix(STORE_COMPOSITES, `${id}::`);
   };
 
   const buildAuthPayload = (): Record<string, unknown> | null => {
@@ -451,9 +575,12 @@ export function Crawler() {
     }
   };
 
-  const captureOne = async (screen: ScreenInput, includeAuth: boolean): Promise<void> => {
-    if (!captureTemplate) throw new Error("Pick a template for the capture viewport.");
-
+  const captureOneCell = async (
+    screen: ScreenInput,
+    template: TemplateInfo,
+    theme: "dark" | "light",
+    includeAuth: boolean,
+  ): Promise<void> => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token.trim().length > 0) headers.Authorization = `Bearer ${token.trim()}`;
 
@@ -467,9 +594,9 @@ export function Crawler() {
       headers,
       body: JSON.stringify({
         url,
-        viewport: captureTemplate.viewport,
-        isMobile: captureTemplate.isMobile,
-        theme: captureTheme,
+        viewport: template.viewport,
+        isMobile: template.isMobile,
+        theme,
         ...(authPayload ? { auth: authPayload } : {}),
         ...(wireActions.length > 0 ? { actions: wireActions } : {}),
       }),
@@ -484,66 +611,95 @@ export function Crawler() {
     const buf = await blob.arrayBuffer();
     const rawBase64 = bufferToBase64(buf);
     const rawBlobUrl = URL.createObjectURL(blob);
+    const key = mediaKey(screen.id, template.id, theme);
 
     setCaptures((cur) => {
-      const prev = cur[screen.id];
+      const prev = cur[key];
       if (prev) URL.revokeObjectURL(prev.rawBlobUrl);
       return {
         ...cur,
-        [screen.id]: {
+        [key]: {
           inputId: screen.id,
           rawBlobUrl,
           rawBase64,
           capturedAt: Date.now(),
-          templateId: captureTemplateId,
-          theme: captureTheme,
+          templateId: template.id,
+          theme,
         },
       };
     });
+    void putBlob(STORE_CAPTURES, key, blob);
   };
 
   const captureAll = async () => {
     setRenderError(null);
-    // Reset progress for everyone first.
+    const cells = matrixCells();
+    if (cells.length === 0) {
+      setRenderError("Pick at least one cell in the capture matrix.");
+      return;
+    }
+
+    // Reset progress for every (screen, cell) we're about to run.
     const initial: Record<string, CaptureProgress> = {};
-    for (const s of screens) initial[s.id] = { inputId: s.id, status: "queued" };
+    for (const s of screens) {
+      for (const c of cells) {
+        initial[mediaKey(s.id, c.template.id, c.theme)] = { status: "queued" };
+      }
+    }
     setProgress(initial);
 
-    // Auth runs once per session conceptually; but the engine re-runs it
-    // for each capture context. That's fine — same login flow per
-    // viewport group. Always include auth on every capture if mode != none.
     const includeAuth = auth.mode !== "none";
 
     for (const s of screens) {
-      setProgress((p) => ({ ...p, [s.id]: { inputId: s.id, status: "running" } }));
-      try {
-        await captureOne(s, includeAuth);
-        setProgress((p) => ({ ...p, [s.id]: { inputId: s.id, status: "done" } }));
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setProgress((p) => ({
-          ...p,
-          [s.id]: { inputId: s.id, status: "error", error: message },
-        }));
+      for (const c of cells) {
+        const key = mediaKey(s.id, c.template.id, c.theme);
+        setProgress((p) => ({ ...p, [key]: { status: "running" } }));
+        try {
+          await captureOneCell(s, c.template, c.theme, includeAuth);
+          setProgress((p) => ({ ...p, [key]: { status: "done" } }));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          setProgress((p) => ({ ...p, [key]: { status: "error", error: message } }));
+        }
       }
     }
   };
 
   const retake = async (screen: ScreenInput) => {
-    setProgress((p) => ({ ...p, [screen.id]: { inputId: screen.id, status: "running" } }));
-    try {
-      await captureOne(screen, auth.mode !== "none");
-      setProgress((p) => ({ ...p, [screen.id]: { inputId: screen.id, status: "done" } }));
-    } catch (err) {
-      setProgress((p) => ({
-        ...p,
-        [screen.id]: {
-          inputId: screen.id,
-          status: "error",
-          error: err instanceof Error ? err.message : String(err),
-        },
-      }));
+    const cells = matrixCells();
+    if (cells.length === 0) return;
+    for (const c of cells) {
+      const key = mediaKey(screen.id, c.template.id, c.theme);
+      setProgress((p) => ({ ...p, [key]: { status: "running" } }));
+      try {
+        await captureOneCell(screen, c.template, c.theme, auth.mode !== "none");
+        setProgress((p) => ({ ...p, [key]: { status: "done" } }));
+      } catch (err) {
+        setProgress((p) => ({
+          ...p,
+          [key]: {
+            status: "error",
+            error: err instanceof Error ? err.message : String(err),
+          },
+        }));
+      }
     }
+  };
+
+  /** Resolves the matrix Set into an ordered list of (template, theme) pairs. */
+  const matrixCells = (): Array<{ template: TemplateInfo; theme: "dark" | "light" }> => {
+    const out: Array<{ template: TemplateInfo; theme: "dark" | "light" }> = [];
+    for (const k of matrix) {
+      const parsed = parseCellKey(k);
+      if (!parsed) continue;
+      const tpl = templates.find((t) => t.id === parsed.templateId);
+      if (!tpl) continue;
+      // Skip themes the template doesn't actually support
+      // (e.g. social-og-card is dark-only).
+      if (!tpl.themes.includes(parsed.theme)) continue;
+      out.push({ template: tpl, theme: parsed.theme });
+    }
+    return out;
   };
 
   const renderAll = async () => {
@@ -551,29 +707,28 @@ export function Crawler() {
     setRenderingAll(true);
     // Drop previous composites + free their URLs.
     setComposites((prev) => {
-      for (const c of prev) URL.revokeObjectURL(c.pngBlobUrl);
-      return [];
+      for (const c of Object.values(prev)) URL.revokeObjectURL(c.pngBlobUrl);
+      return {};
     });
 
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token.trim().length > 0) headers.Authorization = `Bearer ${token.trim()}`;
 
+    // Each capture in `captures` knows its own templateId + theme. One
+    // capture → one composite, rendered through that same template.
     const targets: {
       screen: ScreenInput;
       capture: ScreenCapture;
       templateId: string;
       theme: "dark" | "light";
     }[] = [];
-    for (const s of screens) {
-      const cap = captures[s.id];
-      if (!cap) continue;
-      for (const tid of renderTemplateIds) {
-        const tpl = templates.find((t) => t.id === tid);
-        if (!tpl) continue;
-        for (const theme of tpl.themes) {
-          targets.push({ screen: s, capture: cap, templateId: tid, theme });
-        }
-      }
+    const screenById = new Map(screens.map((s) => [s.id, s]));
+    for (const cap of Object.values(captures)) {
+      const screen = screenById.get(cap.inputId);
+      if (!screen) continue;
+      const tpl = templates.find((t) => t.id === cap.templateId);
+      if (!tpl) continue;
+      targets.push({ screen, capture: cap, templateId: cap.templateId, theme: cap.theme });
     }
 
     try {
@@ -595,16 +750,22 @@ export function Crawler() {
         }
         const blob = await res.blob();
         const blobUrl = URL.createObjectURL(blob);
-        setComposites((cur) => [
-          ...cur,
-          {
-            inputId: t.screen.id,
-            templateId: t.templateId,
-            theme: t.theme,
-            pngBlobUrl: blobUrl,
-            renderedAt: Date.now(),
-          },
-        ]);
+        const key = mediaKey(t.screen.id, t.templateId, t.theme);
+        setComposites((cur) => {
+          const prev = cur[key];
+          if (prev) URL.revokeObjectURL(prev.pngBlobUrl);
+          return {
+            ...cur,
+            [key]: {
+              inputId: t.screen.id,
+              templateId: t.templateId,
+              theme: t.theme,
+              pngBlobUrl: blobUrl,
+              renderedAt: Date.now(),
+            },
+          };
+        });
+        void putBlob(STORE_COMPOSITES, key, blob);
       }
     } catch (err) {
       setRenderError(err instanceof Error ? err.message : String(err));
@@ -694,45 +855,63 @@ export function Crawler() {
             </div>
           </fieldset>
 
-          <fieldset>
-            <legend>Capture viewport</legend>
+          <fieldset className="capture-matrix">
+            <legend>Capture matrix</legend>
             <p className="field-hint" style={{ marginTop: 0 }}>
-              All screens are captured at this viewport. Pick the smallest mobile-class template
-              you'll render through; render-time templates can override later.
+              Check each <code>(template × theme)</code> cell you want captures for. Every screen
+              gets captured once per checked cell. Render reuses the same matrix — one capture, one
+              composite.
             </p>
-            <div className="field">
-              <label htmlFor="cr-capture-template">Template (for viewport reference)</label>
-              <select
-                id="cr-capture-template"
-                value={captureTemplateId}
-                onChange={(e) => setCaptureTemplateId(e.target.value)}
-                disabled={isDisabled || templates.length === 0}
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.displayName} — viewport {t.viewport.width}×{t.viewport.height}@
-                    {t.viewport.dpr}x
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Theme</label>
-              <div className="theme-tabs" role="tablist" style={{ marginTop: 0 }}>
-                {(["dark", "light"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    aria-selected={captureTheme === t}
-                    className={captureTheme === t ? "active" : ""}
-                    onClick={() => setCaptureTheme(t)}
-                    disabled={isDisabled}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {templates.length === 0 ? (
+              <p className="field-hint">No templates installed yet.</p>
+            ) : (
+              <table className="matrix-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>dark</th>
+                    <th>light</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {templates.map((t) => (
+                    <tr key={t.id}>
+                      <th scope="row">
+                        {t.displayName}
+                        <span className="matrix-template-meta">
+                          {t.viewport.width}×{t.viewport.height}@{t.viewport.dpr}x
+                        </span>
+                      </th>
+                      {(["dark", "light"] as const).map((theme) => {
+                        const supported = t.themes.includes(theme);
+                        const k = cellKey(t.id, theme);
+                        return (
+                          <td key={theme}>
+                            <input
+                              type="checkbox"
+                              checked={supported && matrix.has(k)}
+                              disabled={isDisabled || !supported}
+                              onChange={() => toggleMatrixCell(t.id, theme)}
+                              aria-label={`Capture ${t.displayName} ${theme}`}
+                              title={
+                                supported
+                                  ? undefined
+                                  : `${t.displayName} doesn't support ${theme} theme`
+                              }
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="field-hint" style={{ marginBottom: 0 }}>
+              {matrix.size} cell{matrix.size === 1 ? "" : "s"} selected. {screens.length} screen
+              {screens.length === 1 ? "" : "s"} = <strong>{matrix.size * screens.length}</strong>{" "}
+              captures total.
+            </p>
           </fieldset>
 
           <AuthFieldset auth={auth} update={updateAuth} disabled={isDisabled} />
@@ -819,9 +998,23 @@ export function Crawler() {
 
         <div className="screen-cards">
           {screens.map((s) => {
-            const status = progress[s.id]?.status ?? "queued";
-            const error = progress[s.id]?.error;
-            const cap = captures[s.id];
+            const cells = matrixCells();
+            // Aggregate per-screen status: error wins, then running, then done, else queued.
+            const cellStatuses = cells.map((c) => {
+              const k = mediaKey(s.id, c.template.id, c.theme);
+              return { cell: c, key: k, prog: progress[k], cap: captures[k] };
+            });
+            const summary: "queued" | "running" | "done" | "error" = cellStatuses.some(
+              (cs) => cs.prog?.status === "error",
+            )
+              ? "error"
+              : cellStatuses.some((cs) => cs.prog?.status === "running")
+                ? "running"
+                : cellStatuses.length > 0 && cellStatuses.every((cs) => cs.cap)
+                  ? "done"
+                  : "queued";
+            const firstError = cellStatuses.find((cs) => cs.prog?.error)?.prog?.error;
+            const anyCaptured = cellStatuses.some((cs) => cs.cap);
             return (
               <article key={s.id} className="screen-card">
                 <header className="screen-card-header">
@@ -835,10 +1028,21 @@ export function Crawler() {
                       disabled={isDisabled}
                       aria-label="Screen name"
                     />
-                    <span className={`status status-${status}`}>{status}</span>
+                    <span className={`status status-${summary}`}>{summary}</span>
+                    {cells.length > 0 && (
+                      <span className="cell-progress" aria-label="Matrix cell progress">
+                        {cellStatuses.map((cs) => (
+                          <span
+                            key={cs.key}
+                            className={`cell-dot cell-dot-${cs.prog?.status ?? (cs.cap ? "done" : "queued")}`}
+                            title={`${cs.cell.template.displayName} / ${cs.cell.theme}: ${cs.prog?.status ?? (cs.cap ? "done" : "queued")}${cs.prog?.error ? ` — ${cs.prog.error}` : ""}`}
+                          />
+                        ))}
+                      </span>
+                    )}
                   </div>
                   <div className="screen-card-actions">
-                    {cap && (
+                    {anyCaptured && (
                       <button type="button" onClick={() => void retake(s)} disabled={isDisabled}>
                         Retake
                       </button>
@@ -893,14 +1097,26 @@ export function Crawler() {
                   onChange={(next) => updateScreen(s.id, { actions: next })}
                 />
 
-                {error && (
+                {firstError && (
                   <div className="screen-card-error" role="alert">
-                    {error}
+                    {firstError}
                   </div>
                 )}
-                {cap && (
-                  <div className="screen-card-preview">
-                    <img src={cap.rawBlobUrl} alt={`${s.name} raw capture`} />
+                {cellStatuses.some((cs) => cs.cap) && (
+                  <div className="screen-card-cells">
+                    {cellStatuses
+                      .filter((cs) => cs.cap)
+                      .map((cs) => (
+                        <figure key={cs.key} className="screen-cell-preview">
+                          <img
+                            src={cs.cap?.rawBlobUrl}
+                            alt={`${s.name} ${cs.cell.template.displayName} ${cs.cell.theme}`}
+                          />
+                          <figcaption>
+                            {cs.cell.template.displayName} / {cs.cell.theme}
+                          </figcaption>
+                        </figure>
+                      ))}
                   </div>
                 )}
               </article>
@@ -941,49 +1157,20 @@ export function Crawler() {
       <section className="crawler-step">
         <h2>3. Render</h2>
         <p className="field-hint" style={{ marginTop: 0 }}>
-          Pick the templates you want. The render uses each captured raw + the screen's caption +
-          the chosen template. Output count: screens × templates × themes per template.
+          Each capture renders through its own template + theme. To change the matrix, edit the grid
+          in Step 1.
         </p>
-
-        <div className="builder-form">
-          <fieldset>
-            <legend>Templates</legend>
-            {templates.map((tpl) => {
-              const checked = renderTemplateIds.has(tpl.id);
-              return (
-                <label key={tpl.id} className="template-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      const next = new Set(renderTemplateIds);
-                      if (checked) next.delete(tpl.id);
-                      else next.add(tpl.id);
-                      setRenderTemplateIds(next);
-                    }}
-                    disabled={isDisabled}
-                  />
-                  <span className="template-checkbox-label">
-                    {tpl.displayName} — {tpl.output.width}×{tpl.output.height} × {tpl.themes.length}{" "}
-                    theme{tpl.themes.length === 1 ? "" : "s"}
-                    <code className="pkg">{tpl.pkg}</code>
-                  </span>
-                </label>
-              );
-            })}
-          </fieldset>
-        </div>
 
         <div style={{ marginTop: "0.75rem" }}>
           <button
             type="button"
             className="btn-primary"
             onClick={() => void renderAll()}
-            disabled={
-              isDisabled || renderingAll || captureCount === 0 || renderTemplateIds.size === 0
-            }
+            disabled={isDisabled || renderingAll || captureCount === 0}
           >
-            {renderingAll ? "Rendering…" : `Render (${captureCount} captured)`}
+            {renderingAll
+              ? "Rendering…"
+              : `Render all (${captureCount} capture${captureCount === 1 ? "" : "s"})`}
           </button>
           {captureCount === 0 && (
             <span style={{ marginLeft: "0.75rem", color: "var(--text-muted)" }}>
@@ -998,17 +1185,17 @@ export function Crawler() {
         )}
       </section>
 
-      {/* ── Step 4: Output ────────────────────────────────────────────── */}
-      {composites.length > 0 && (
+      {/* ── Step 4: Composites ────────────────────────────────────────── */}
+      {Object.keys(composites).length > 0 && (
         <section className="crawler-step">
           <h2>4. Composites</h2>
           <div className="gallery-grid">
-            {composites.map((c) => {
+            {Object.values(composites).map((c) => {
               const screen = screens.find((s) => s.id === c.inputId);
               const tpl = templates.find((t) => t.id === c.templateId);
               const filename = `${screen?.name ?? "screen"}-${c.templateId}-${c.theme}.png`;
               return (
-                <article key={`${c.inputId}-${c.templateId}-${c.theme}`} className="gallery-card">
+                <article key={mediaKey(c.inputId, c.templateId, c.theme)} className="gallery-card">
                   <div className="gallery-card-preview">
                     <img src={c.pngBlobUrl} alt={filename} />
                   </div>

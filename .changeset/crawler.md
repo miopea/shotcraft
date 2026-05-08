@@ -77,3 +77,21 @@ gated by an env var the CLI sets and the App Service doesn't.
 In the Crawler header, when local mode is active, a green badge
 shows the bound config path so you know edits go to disk and not
 just the browser.
+
+**Capture matrix + IndexedDB durability** — the Crawler's Step 1
+gains a (template × theme) checkbox grid replacing the previous
+single-template/single-theme picker. Every screen captures once
+per checked cell; output count = `screens × cells`. Matrix cells
+that don't apply to a template (e.g. `social-og-card`'s light
+column) are auto-disabled. Per-screen card headers gain a row of
+status dots — one per cell — so you see exactly which captures
+are queued / running / done / errored.
+
+Captured raws + rendered composites now persist in IndexedDB
+(`shotcraft.crawler.v1`, two object stores keyed by
+`${screenId}::${templateId}::${theme}`). Reload, close-and-reopen,
+or come back tomorrow and your captures + composites are still
+there — no need to re-capture. Removing a screen prefix-deletes
+its IDB entries; "Forget saved settings" wipes both stores along
+with localStorage. No third-party IDB lib — small in-house wrapper
+under `packages/web/client/src/persistence/idb.ts`.

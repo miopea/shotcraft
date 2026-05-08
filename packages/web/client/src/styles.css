@@ -828,6 +828,126 @@ label {
   padding: 0.15rem 0.5rem;
 }
 
+/* Capture matrix grid (Step 1) */
+
+.capture-matrix {
+  margin-top: 1rem;
+}
+
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+
+.matrix-table th,
+.matrix-table td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  text-align: center;
+}
+
+.matrix-table thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+
+.matrix-table tbody th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+
+.matrix-template-meta {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.matrix-table input[type="checkbox"]:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Per-cell capture progress dots in screen card headers */
+
+.cell-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+}
+
+.cell-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--border);
+  display: inline-block;
+}
+
+.cell-dot-running {
+  background: #fbbf24;
+  animation: cell-dot-pulse 1s ease-in-out infinite;
+}
+
+.cell-dot-done {
+  background: var(--accent);
+}
+
+.cell-dot-error {
+  background: #ef4444;
+}
+
+@keyframes cell-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Per-cell raw previews under each screen card */
+
+.screen-card-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.screen-cell-preview {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.screen-cell-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 160px;
+  object-fit: contain;
+  background: #000;
+}
+
+.screen-cell-preview figcaption {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
 /* Discovery technique toggles (Step 1) */
 
 .discovery-techniques {
