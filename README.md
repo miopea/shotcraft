@@ -38,6 +38,11 @@ upload to App Store Connect, drop into your README, or post on Twitter.
 
 → [Full getting-started walk-through](https://shotcraft.dev/getting-started/)
 
+**Try the gallery + config builder today** without installing anything —
+the hosted companion is live at
+[shotcraft-web.azurewebsites.net](https://shotcraft-web.azurewebsites.net)
+(swaps to `shotcraft.dev` once the apex domain is wired up).
+
 ## What sets it apart
 
 - **Captures from your live app** — no manual screenshot uploads. Point
@@ -172,13 +177,24 @@ PRs welcome — keep them focused, include a test, and add a
 
 ## Status
 
-🟢 **v0.1** — capture engine, render engine, and all six first-party
-templates land in the queued v0.1 release. Hosted companion (`web/`)
-gallery + interactive config builder + opt-in live demo are next.
+🟢 **v0.1 ready to publish.** All eight phases of the v1 plan have
+landed:
 
-See [the v1 plan](./.claude/plans/shotcraft-v1.md) for the full roadmap
-and [`PUBLISHING.md`](./PUBLISHING.md) for the operator-side prerequisites
-to ship to npm and shotcraft.dev.
+- Capture engine + render engine (`shotcraft` CLI + programmatic API)
+- Six first-party template packages, each with sample composites
+- BudgetBug example + eat-our-own-dogfood example (the README hero
+  above)
+- Astro Starlight docs site (live at the BFG-managed mirror today;
+  swaps to `shotcraft.dev` when the apex is bought)
+- Hosted companion (`@shotcraft/web`) — templates gallery + config
+  builder + `/api/templates`, deployed to Azure App Service
+- npm publish plumbing — Changesets, GitHub Actions, provenance —
+  awaiting operator-side prereqs (`@shotcraft` scope, GitHub repo,
+  `NPM_TOKEN`)
+
+See [the v1 plan](./.claude/plans/shotcraft-v1.md) for the design
+decisions and [`PUBLISHING.md`](./PUBLISHING.md) for the remaining
+operator-side prerequisites and the Azure deployment recipes.
 
 ## License
 
