@@ -1,0 +1,130 @@
+/*
+ * Shotcraft template — Apple App Store iPad 13" composite.
+ *
+ * Canvas 2064×2752 (the iPad 13" tier required by App Store Connect).
+ * Vertical layout — caption block at the top, iPad frame below.
+ */
+
+:root {
+  --canvas-w: 2064px;
+  --canvas-h: 2752px;
+  --device-width-pct: 65%; /* iPad is wider than iPhone, smaller % of canvas */
+  --bg-from: #0f172a;
+  --bg-to: #064e3b;
+  --caption-color: #f1f5f9;
+  --subtitle-color: rgba(241, 245, 249, 0.75);
+}
+
+[data-theme="light"] {
+  --bg-from: #f8fafc;
+  --bg-to: #d1fae5;
+  --caption-color: #0f172a;
+  --subtitle-color: rgba(15, 23, 42, 0.75);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  color: var(--caption-color);
+  overflow: hidden;
+}
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.caption-block {
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  text-align: center;
+}
+
+.caption {
+  margin: 0;
+  font-size: 128px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--caption-color);
+}
+
+.subtitle {
+  margin: 32px 0 0;
+  font-size: 72px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--subtitle-color);
+}
+
+.device-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5%;
+  display: flex;
+  justify-content: center;
+  perspective: 3200px;
+  perspective-origin: 50% 50%;
+}
+
+.device {
+  position: relative;
+  width: var(--device-width-pct);
+  transform: rotateY(-7deg) rotateX(2deg) translateZ(0);
+  transform-origin: center;
+  filter: drop-shadow(40px 60px 80px rgba(0, 0, 0, 0.35));
+}
+
+/*
+ * Frame viewBox: 1080 × 1438. Screen aperture: 1032 × 1376 inset by
+ * (24, 31). Insets as % → top/bottom 2.155 %, left/right 2.222 %.
+ */
+.screen-host {
+  position: absolute;
+  top: 2.16%;
+  left: 2.22%;
+  right: 2.22%;
+  bottom: 2.16%;
+  border-radius: 4.5%;
+  overflow: hidden;
+  background: #000;
+  z-index: 1;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  image-rendering: optimizeQuality;
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 2;
+}

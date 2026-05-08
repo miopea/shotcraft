@@ -57,7 +57,112 @@ importers:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/template-app-store-ipad:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.7.0
+        version: 22.19.17
+      playwright:
+        specifier: ^1.49.0
+        version: 1.59.1
+      shotcraft:
+        specifier: workspace:*
+        version: link:../core
+      tsup:
+        specifier: ^8.2.4
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.19.17)
+
   packages/template-app-store-iphone:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.7.0
+        version: 22.19.17
+      playwright:
+        specifier: ^1.49.0
+        version: 1.59.1
+      shotcraft:
+        specifier: workspace:*
+        version: link:../core
+      tsup:
+        specifier: ^8.2.4
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/template-play-store-phone:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.7.0
+        version: 22.19.17
+      playwright:
+        specifier: ^1.49.0
+        version: 1.59.1
+      shotcraft:
+        specifier: workspace:*
+        version: link:../core
+      tsup:
+        specifier: ^8.2.4
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/template-play-store-tablet:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.7.0
+        version: 22.19.17
+      playwright:
+        specifier: ^1.49.0
+        version: 1.59.1
+      shotcraft:
+        specifier: workspace:*
+        version: link:../core
+      tsup:
+        specifier: ^8.2.4
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/template-readme-hero:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.7.0
+        version: 22.19.17
+      playwright:
+        specifier: ^1.49.0
+        version: 1.59.1
+      shotcraft:
+        specifier: workspace:*
+        version: link:../core
+      tsup:
+        specifier: ^8.2.4
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/template-social-og-card:
     devDependencies:
       "@types/node":
         specifier: ^22.7.0

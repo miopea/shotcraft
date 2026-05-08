@@ -1,0 +1,56 @@
+{
+  "name": "@shotcraft/template-play-store-phone",
+  "version": "0.0.0",
+  "description": "Shotcraft template — Google Play phone screenshot composite. 1080×1920 with Pixel-shaped frame and Material-coded brand gradient.",
+  "keywords": [
+    "shotcraft",
+    "shotcraft-template",
+    "play-store",
+    "android",
+    "screenshot"
+  ],
+  "homepage": "https://shotcraft.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miopea/shotcraft.git",
+    "directory": "packages/template-play-store-phone"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wrapper.html",
+    "wrapper.css",
+    "frames",
+    "samples",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup --watch"
+  },
+  "peerDependencies": {
+    "shotcraft": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "playwright": "^1.49.0",
+    "shotcraft": "workspace:*",
+    "tsup": "^8.2.4",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

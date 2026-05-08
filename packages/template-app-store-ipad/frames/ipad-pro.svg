@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  iPad Pro 13" chassis silhouette — derived from marvelapp/devices.css
+  (Apache-2.0). Simplified to chassis outline + screen aperture + tiny
+  front camera dot. Less corner-rounding than iPhone (60 vs 80) and
+  thinner bezels relative to the larger canvas.
+
+  viewBox: 1080 × 1438. Screen aperture is 1032 × 1376 (matching the
+  captured raw at dpr 2) inset by (24, 31).
+-->
+<svg viewBox="0 0 1080 1438" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="ipad-bezel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2c2c30" />
+      <stop offset="50%" stop-color="#0a0a0c" />
+      <stop offset="100%" stop-color="#1a1a20" />
+    </linearGradient>
+    <mask id="ipad-screen-cutout">
+      <rect x="0" y="0" width="1080" height="1438" rx="60" ry="60" fill="white" />
+      <rect x="24" y="31" width="1032" height="1376" rx="44" ry="44" fill="black" />
+    </mask>
+  </defs>
+
+  <rect
+    x="0"
+    y="0"
+    width="1080"
+    height="1438"
+    rx="60"
+    ry="60"
+    fill="url(#ipad-bezel)"
+    mask="url(#ipad-screen-cutout)"
+  />
+
+  <!-- Outer chassis highlight -->
+  <rect
+    x="1"
+    y="1"
+    width="1078"
+    height="1436"
+    rx="59"
+    ry="59"
+    fill="none"
+    stroke="rgba(255, 255, 255, 0.07)"
+    stroke-width="2"
+  />
+
+  <!-- Inner screen-edge shadow -->
+  <rect
+    x="24"
+    y="31"
+    width="1032"
+    height="1376"
+    rx="44"
+    ry="44"
+    fill="none"
+    stroke="rgba(0, 0, 0, 0.5)"
+    stroke-width="2"
+  />
+
+  <!-- Front camera (single small dot near top center, in the bezel above the screen). -->
+  <circle cx="540" cy="15.5" r="5" fill="#000" stroke="rgba(255,255,255,0.18)" stroke-width="0.6" />
+</svg>

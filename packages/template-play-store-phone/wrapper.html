@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shotcraft — Play Store phone</title>
+    <link rel="stylesheet" href="wrapper.css" />
+  </head>
+  <body data-theme="dark">
+    <div class="canvas">
+      <div class="caption-block">
+        <h1 id="caption" class="caption"></h1>
+        <p id="subtitle" class="subtitle"></p>
+      </div>
+      <div class="device-wrap">
+        <div class="device">
+          <div class="screen-host">
+            <img id="screen" class="screen" alt="" />
+          </div>
+          <img class="frame" src="frames/pixel.svg" alt="" />
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const params = new URLSearchParams(location.search);
+        document.body.dataset.theme = params.get("theme") === "light" ? "light" : "dark";
+        document.getElementById("caption").textContent = params.get("caption") || "";
+        const subtitleEl = document.getElementById("subtitle");
+        const subtitle = params.get("subtitle");
+        if (subtitle) subtitleEl.textContent = subtitle;
+        else subtitleEl.remove();
+        const img = document.getElementById("screen");
+        const finish = (state) => {
+          document.body.dataset.rendered = state;
+        };
+        img.addEventListener("load", () => finish("true"));
+        img.addEventListener("error", () => finish("error"));
+        const imageUrl = params.get("imageUrl");
+        if (!imageUrl) {
+          finish("error");
+          return;
+        }
+        img.src = imageUrl;
+      })();
+    </script>
+  </body>
+</html>

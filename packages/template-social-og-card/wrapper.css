@@ -1,0 +1,143 @@
+/*
+ * Shotcraft template — Open Graph / Twitter card (1200 × 630, dark only).
+ *
+ * Caption-dominant: copy fills ~65 % of canvas, a small framed phone peeks
+ * in from the bottom-right tilted toward the caption to draw the eye.
+ *
+ * Optimized for thumbnail legibility — the card is consumed at ~250-350 px
+ * wide in feeds (Twitter, Slack, Discord). Caption typography wins; device
+ * is decoration.
+ */
+
+:root {
+  --canvas-w: 1200px;
+  --canvas-h: 630px;
+  /* Brand-aligned with the dark App Store palette so OG cards link into the
+   * same visual story as the App Store screenshots. */
+  --bg-from: #0f172a;
+  --bg-to: #064e3b;
+  --caption-color: #f1f5f9;
+  --subtitle-color: rgba(241, 245, 249, 0.78);
+  --accent: #34d399;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background:
+    radial-gradient(at 78% 110%, rgba(52, 211, 153, 0.18) 0%, transparent 60%),
+    linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  color: var(--caption-color);
+  overflow: hidden;
+}
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.caption-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Caption fills ~70 % of canvas; device peek occupies the remaining ~30 %. */
+  padding: 60px 340px 60px 64px;
+  text-align: left;
+  z-index: 1;
+}
+
+.caption {
+  margin: 0;
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.022em;
+  color: var(--caption-color);
+}
+
+.subtitle {
+  margin: 18px 0 0;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--subtitle-color);
+  max-width: 620px;
+}
+
+.device-pane {
+  position: absolute;
+  /*
+   * Anchor a small device peek to the bottom-right, tilted toward the
+   * caption so the composition flows from copy into product. Pushed
+   * partially off-canvas (right: -50, bottom: -90) so it reads as a peek
+   * rather than a flat product shot.
+   */
+  right: -50px;
+  bottom: -90px;
+  width: 240px;
+  height: 510px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  perspective: 2000px;
+  perspective-origin: 50% 50%;
+}
+
+.device {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 470 / 1000;
+  transform: rotateY(18deg) rotateX(-3deg) translateZ(0);
+  transform-origin: center;
+  filter: drop-shadow(-14px 26px 56px rgba(0, 0, 0, 0.6));
+}
+
+.screen-host {
+  position: absolute;
+  top: 2%;
+  left: 4.25%;
+  right: 4.25%;
+  bottom: 2%;
+  border-radius: 7.5%;
+  overflow: hidden;
+  background: #000;
+  z-index: 1;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  image-rendering: optimizeQuality;
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 2;
+}

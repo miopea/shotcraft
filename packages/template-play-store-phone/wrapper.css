@@ -1,0 +1,133 @@
+/*
+ * Shotcraft template — Google Play phone composite (1080×1920).
+ *
+ * Brighter than App Store templates: Play thumbnails compete with the
+ * colorful Play UI. We lean Material — saturated emerald-cyan gradients
+ * that hold attention against busy listings.
+ */
+
+:root {
+  --canvas-w: 1080px;
+  --canvas-h: 1920px;
+  --device-width-pct: 78%;
+  /* Material-coded saturated dark — emerald 950 → cyan 700 */
+  --bg-from: #064e3b;
+  --bg-to: #0e7490;
+  --caption-color: #ecfeff;
+  --subtitle-color: rgba(236, 254, 255, 0.78);
+}
+
+[data-theme="light"] {
+  /* Material-coded light — teal 50 → sky 100 */
+  --bg-from: #ecfdf5;
+  --bg-to: #e0f2fe;
+  --caption-color: #064e3b;
+  --subtitle-color: rgba(6, 78, 59, 0.75);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  font-family:
+    "Roboto", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  color: var(--caption-color);
+  overflow: hidden;
+}
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.caption-block {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 82%;
+  text-align: center;
+}
+
+.caption {
+  margin: 0;
+  font-size: 80px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--caption-color);
+}
+
+.subtitle {
+  margin: 22px 0 0;
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1.18;
+  color: var(--subtitle-color);
+}
+
+.device-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5%;
+  display: flex;
+  justify-content: center;
+  perspective: 2200px;
+  perspective-origin: 50% 50%;
+}
+
+.device {
+  position: relative;
+  width: var(--device-width-pct);
+  transform: rotateY(-8deg) rotateX(2.5deg) translateZ(0);
+  transform-origin: center;
+  filter: drop-shadow(28px 46px 60px rgba(0, 0, 0, 0.32));
+}
+
+/*
+ * Frame viewBox: 380 × 680. Screen aperture: 360 × 640 at offset (10, 20).
+ * Insets: top/bottom 2.94%, left/right 2.63%.
+ */
+.screen-host {
+  position: absolute;
+  top: 2.94%;
+  left: 2.63%;
+  right: 2.63%;
+  bottom: 2.94%;
+  border-radius: 7%;
+  overflow: hidden;
+  background: #000;
+  z-index: 1;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  image-rendering: optimizeQuality;
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 2;
+}
