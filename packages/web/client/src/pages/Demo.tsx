@@ -1,12 +1,48 @@
 import { useEffect, useState } from "react";
 import type { HealthResponse, TemplateInfo, TemplatesResponse } from "../types.js";
 
+type AuthMode = "none" | "api" | "form" | "session";
+
 interface RenderState {
   status: "idle" | "loading" | "success" | "error";
   url?: string;
   pngObjectUrl?: string;
   error?: string;
 }
+
+interface AuthState {
+  mode: AuthMode;
+  // Shared.
+  email: string;
+  password: string;
+  // API login.
+  apiUrl: string;
+  apiBodyJson: string;
+  // Form login.
+  formLoginUrl: string;
+  emailField: string;
+  passwordField: string;
+  submitButton: string;
+  waitForUrl: string;
+  // Session.
+  cookiesJson: string;
+  localStorageJson: string;
+}
+
+const DEFAULT_AUTH: AuthState = {
+  mode: "none",
+  email: "",
+  password: "",
+  apiUrl: "/api/auth/login",
+  apiBodyJson: `{\n  "email": "demo@example.com",\n  "password": "..."\n}`,
+  formLoginUrl: "/login",
+  emailField: "input[name=email]",
+  passwordField: "input[name=password]",
+  submitButton: "button[type=submit]",
+  waitForUrl: "",
+  cookiesJson: `[\n  { "name": "session", "value": "...", "domain": "your.app" }\n]`,
+  localStorageJson: `{\n  "onboarding-completed": "true"\n}`,
+};
 
 export function Demo() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -17,6 +53,7 @@ export function Demo() {
   const [templateId, setTemplateId] = useState("readme-hero");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [token, setToken] = useState("");
+  const [auth, setAuth] = useState<AuthState>(DEFAULT_AUTH);
   const [render, setRender] = useState<RenderState>({ status: "idle" });
 
   useEffect(() => {
@@ -30,7 +67,6 @@ export function Demo() {
       .catch(() => setTemplates([]));
   }, []);
 
-  // Cache previously created blob URL so we revoke when a new render lands.
   useEffect(() => {
     return () => {
       if (render.pngObjectUrl) URL.revokeObjectURL(render.pngObjectUrl);
@@ -41,17 +77,53 @@ export function Demo() {
   const themeOptions = activeTemplate?.themes ?? ["dark"];
   const isDisabled = health !== null && !health.liveDemoEnabled;
 
-  // Keep theme valid for the picked template.
   useEffect(() => {
     if (activeTemplate && !activeTemplate.themes.includes(theme)) {
       setTheme(activeTemplate.themes[0] ?? "dark");
     }
   }, [activeTemplate, theme]);
 
+  const updateAuth = <K extends keyof AuthState>(key: K, value: AuthState[K]) => {
+    setAuth((s) => ({ ...s, [key]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (render.pngObjectUrl) URL.revokeObjectURL(render.pngObjectUrl);
     setRender({ status: "loading" });
+
+    let authPayload: Record<string, unknown> | undefined;
+    try {
+      if (auth.mode === "api") {
+        authPayload = {
+          type: "api",
+          url: auth.apiUrl,
+          body: JSON.parse(auth.apiBodyJson),
+        };
+      } else if (auth.mode === "form") {
+        authPayload = {
+          type: "form",
+          url: auth.formLoginUrl,
+          emailField: auth.emailField,
+          passwordField: auth.passwordField,
+          submitButton: auth.submitButton,
+          email: auth.email,
+          password: auth.password,
+          ...(auth.waitForUrl ? { waitForUrl: auth.waitForUrl } : {}),
+        };
+      } else if (auth.mode === "session") {
+        const session: Record<string, unknown> = { type: "session" };
+        const trimmedCookies = auth.cookiesJson.trim();
+        if (trimmedCookies.length > 0) session.cookies = JSON.parse(trimmedCookies);
+        const trimmedLocal = auth.localStorageJson.trim();
+        if (trimmedLocal.length > 0) session.localStorage = JSON.parse(trimmedLocal);
+        authPayload = session;
+      }
+    } catch (parseErr) {
+      const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+      setRender({ status: "error", error: `Auth JSON parse failed: ${msg}` });
+      return;
+    }
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -67,6 +139,7 @@ export function Demo() {
           subtitle: subtitle || undefined,
           templateId,
           theme,
+          ...(authPayload ? { auth: authPayload } : {}),
         }),
       });
 
@@ -88,8 +161,9 @@ export function Demo() {
     <section className="container">
       <h1>Live demo</h1>
       <p className="lede">
-        Paste any public URL, pick a template, and Shotcraft renders a real composite from this
-        server. Same engine the CLI runs locally — no install required.
+        Paste any URL, pick a template, and Shotcraft renders a real composite from this server.
+        Want screenshots of a private app? Add a target-app login below — Shotcraft signs in before
+        capturing.
       </p>
 
       {isDisabled && (
@@ -123,7 +197,7 @@ export function Demo() {
                 disabled={isDisabled}
               />
               <p className="field-hint">
-                Must be publicly reachable HTTP(S). Localhost / private IPs blocked server-side.
+                Public HTTP(S). Localhost / private IPs blocked server-side.
               </p>
             </div>
           </fieldset>
@@ -189,7 +263,171 @@ export function Demo() {
           </fieldset>
 
           <fieldset>
-            <legend>Auth (optional)</legend>
+            <legend>Target-app login (optional)</legend>
+            <p className="field-hint" style={{ marginTop: 0, marginBottom: "0.75rem" }}>
+              Use this to render screens that need authentication. Credentials stay server-side and
+              are never logged. The deployment must have <code>SHOTCRAFT_LIVE_DEMO_TOKEN</code> set
+              — otherwise this field is refused.
+            </p>
+            <div className="field">
+              <label>Login flow</label>
+              <div className="theme-tabs" role="tablist" style={{ marginTop: 0 }}>
+                {(["none", "api", "form", "session"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="tab"
+                    aria-selected={auth.mode === m}
+                    className={auth.mode === m ? "active" : ""}
+                    onClick={() => updateAuth("mode", m)}
+                    disabled={isDisabled}
+                  >
+                    {m === "none" ? "none" : m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {auth.mode === "api" && (
+              <>
+                <div className="field">
+                  <label htmlFor="auth-api-url">Login endpoint</label>
+                  <input
+                    id="auth-api-url"
+                    type="text"
+                    value={auth.apiUrl}
+                    onChange={(e) => updateAuth("apiUrl", e.target.value)}
+                    placeholder="/api/auth/login"
+                    disabled={isDisabled}
+                  />
+                  <p className="field-hint">Relative to the target URL or an absolute URL.</p>
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-api-body">JSON body</label>
+                  <textarea
+                    id="auth-api-body"
+                    rows={5}
+                    value={auth.apiBodyJson}
+                    onChange={(e) => updateAuth("apiBodyJson", e.target.value)}
+                    disabled={isDisabled}
+                    spellCheck={false}
+                  />
+                  <p className="field-hint">
+                    Sent as <code>POST</code> with <code>Content-Type: application/json</code>.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {auth.mode === "form" && (
+              <>
+                <div className="field">
+                  <label htmlFor="auth-form-url">Login page URL</label>
+                  <input
+                    id="auth-form-url"
+                    type="text"
+                    value={auth.formLoginUrl}
+                    onChange={(e) => updateAuth("formLoginUrl", e.target.value)}
+                    placeholder="/login"
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-form-email-field">Email/username selector</label>
+                  <input
+                    id="auth-form-email-field"
+                    type="text"
+                    value={auth.emailField}
+                    onChange={(e) => updateAuth("emailField", e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-form-password-field">Password selector</label>
+                  <input
+                    id="auth-form-password-field"
+                    type="text"
+                    value={auth.passwordField}
+                    onChange={(e) => updateAuth("passwordField", e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-form-submit">Submit selector</label>
+                  <input
+                    id="auth-form-submit"
+                    type="text"
+                    value={auth.submitButton}
+                    onChange={(e) => updateAuth("submitButton", e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-form-email">Email / username</label>
+                  <input
+                    id="auth-form-email"
+                    type="text"
+                    value={auth.email}
+                    onChange={(e) => updateAuth("email", e.target.value)}
+                    disabled={isDisabled}
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-form-password">Password</label>
+                  <input
+                    id="auth-form-password"
+                    type="password"
+                    value={auth.password}
+                    onChange={(e) => updateAuth("password", e.target.value)}
+                    disabled={isDisabled}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-form-wait-url">Wait for URL after submit (optional)</label>
+                  <input
+                    id="auth-form-wait-url"
+                    type="text"
+                    value={auth.waitForUrl}
+                    onChange={(e) => updateAuth("waitForUrl", e.target.value)}
+                    placeholder="**/dashboard"
+                    disabled={isDisabled}
+                  />
+                </div>
+              </>
+            )}
+
+            {auth.mode === "session" && (
+              <>
+                <div className="field">
+                  <label htmlFor="auth-session-cookies">Cookies (JSON array)</label>
+                  <textarea
+                    id="auth-session-cookies"
+                    rows={5}
+                    value={auth.cookiesJson}
+                    onChange={(e) => updateAuth("cookiesJson", e.target.value)}
+                    disabled={isDisabled}
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-session-local">localStorage (JSON object, optional)</label>
+                  <textarea
+                    id="auth-session-local"
+                    rows={4}
+                    value={auth.localStorageJson}
+                    onChange={(e) => updateAuth("localStorageJson", e.target.value)}
+                    disabled={isDisabled}
+                    spellCheck={false}
+                  />
+                </div>
+              </>
+            )}
+          </fieldset>
+
+          <fieldset>
+            <legend>Demo gate (optional)</legend>
             <div className="field">
               <label htmlFor="demo-token">Bearer token</label>
               <input
@@ -197,7 +435,7 @@ export function Demo() {
                 type="password"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="Only required if SHOTCRAFT_LIVE_DEMO_TOKEN is set"
+                placeholder="Required if SHOTCRAFT_LIVE_DEMO_TOKEN is set"
                 disabled={isDisabled}
                 autoComplete="off"
               />
@@ -217,12 +455,17 @@ export function Demo() {
           <h2>Output</h2>
           {render.status === "idle" && (
             <p style={{ color: "var(--text-muted)" }}>
-              Submit the form to render. Captures + composites take 5–15 seconds.
+              Submit the form to render. Captures + composites take 5–15 seconds (longer if a login
+              flow runs first).
             </p>
           )}
           {render.status === "loading" && (
             <p style={{ color: "var(--text-muted)" }}>
-              Capturing {targetUrl} → composing through {activeTemplate?.displayName ?? templateId}…
+              {auth.mode !== "none"
+                ? `Logging in (${auth.mode}) → capturing → composing through ${
+                    activeTemplate?.displayName ?? templateId
+                  }…`
+                : `Capturing → composing through ${activeTemplate?.displayName ?? templateId}…`}
             </p>
           )}
           {render.status === "error" && (

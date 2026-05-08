@@ -6,15 +6,24 @@
  * `SHOTCRAFT_LIVE_DEMO=1`. Optional shared-secret gate via
  * `SHOTCRAFT_LIVE_DEMO_TOKEN` (callers send `Authorization: Bearer <token>`).
  *
- * Body: { url, caption, subtitle?, templateId, theme? }
+ * Body: { url, caption, subtitle?, templateId, theme?, auth? }
+ *   auth (optional, target-app login) is one of:
+ *     { type: "api", url, body, method?, headers?, expectStatus? }
+ *     { type: "form", url, emailField, passwordField, submitButton, email, password, ... }
+ *     { type: "session", cookies?, localStorage?, sessionStorage? }
+ *
  * Returns: image/png (raw bytes) on success, JSON error otherwise.
  *
  * Hard limits live in `render-demo-engine.ts`: 1 render at a time,
  * 60s total per request, and an SSRF-blocking URL allowlist.
+ *
+ * Security: when `auth` is supplied the gate token (SHOTCRAFT_LIVE_DEMO_TOKEN)
+ * is REQUIRED. A live-demo that submits credentials to arbitrary sites
+ * without a gate is a credential-stuffing tool — refuse it.
  */
 
 import { Router } from "express";
-import { runRenderDemo } from "../render-demo-engine.js";
+import { runRenderDemo, type RenderDemoAuth } from "../render-demo-engine.js";
 
 export const renderDemoRouter: Router = Router();
 
@@ -49,6 +58,16 @@ renderDemoRouter.post("/", (req, res) => {
     return;
   }
 
+  const auth = body.auth as RenderDemoAuth | undefined;
+  if (auth && LIVE_DEMO_TOKEN.length === 0) {
+    res.status(400).json({
+      error:
+        "Target-app `auth` requires the SHOTCRAFT_LIVE_DEMO_TOKEN env var to be set. " +
+        "Submitting credentials through an ungated endpoint would expose the deployment as a credential-stuffing tool.",
+    });
+    return;
+  }
+
   // Hand off to the engine; it does its own validation + queueing.
   void runRenderDemo({
     url: typeof body.url === "string" ? body.url : "",
@@ -56,6 +75,7 @@ renderDemoRouter.post("/", (req, res) => {
     ...(typeof body.subtitle === "string" ? { subtitle: body.subtitle } : {}),
     templateId: typeof body.templateId === "string" ? body.templateId : "",
     ...(body.theme === "dark" || body.theme === "light" ? { theme: body.theme } : {}),
+    ...(auth ? { auth } : {}),
   })
     .then((result) => {
       if (!result.ok) {
@@ -69,6 +89,8 @@ renderDemoRouter.post("/", (req, res) => {
       res.send(result.png);
     })
     .catch((err: unknown) => {
+      // Don't echo the full error chain — auth errors might include the
+      // body we don't want to log. Just surface the top-line message.
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: `render-demo crashed: ${message}` });
     });

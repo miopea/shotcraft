@@ -20,9 +20,47 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { lookup as dnsLookup } from "node:dns/promises";
-import { chromium, type Browser } from "playwright";
+import { chromium, type Browser, type Page } from "playwright";
 import type { TemplateInfo } from "./registry.js";
 import { TEMPLATE_REGISTRY } from "./registry.js";
+
+/**
+ * Optional target-app authentication. Mirrors the `apiLogin` /
+ * `formLogin` / `injectSession` shapes from the `shotcraft/auth`
+ * helpers — same fields, same semantics, just inlined here so the
+ * deploy bundle doesn't need shotcraft as a runtime dep.
+ */
+export type RenderDemoAuth =
+  | {
+      type: "api";
+      url: string;
+      body: unknown;
+      method?: "POST" | "PUT" | "PATCH" | "GET" | "DELETE";
+      headers?: Record<string, string>;
+      expectStatus?: number;
+    }
+  | {
+      type: "form";
+      url: string;
+      emailField: string;
+      passwordField: string;
+      submitButton: string;
+      email: string;
+      password: string;
+      waitForUrl?: string;
+      waitForSelector?: string;
+    }
+  | {
+      type: "session";
+      cookies?: ReadonlyArray<{
+        name: string;
+        value: string;
+        domain?: string;
+        path?: string;
+      }>;
+      localStorage?: Record<string, string>;
+      sessionStorage?: Record<string, string>;
+    };
 
 export interface RenderDemoRequest {
   url: string;
@@ -30,6 +68,8 @@ export interface RenderDemoRequest {
   subtitle?: string;
   templateId: string;
   theme?: "dark" | "light";
+  /** Target-app auth — runs as setup() before the capture goto. */
+  auth?: RenderDemoAuth;
 }
 
 export interface RenderDemoSuccess {
@@ -117,6 +157,14 @@ async function runOne(
       });
       const page = await ctx.newPage();
       try {
+        // If target-app auth was supplied, run it before navigating to
+        // the captured URL. The capture context already has the right
+        // viewport + colorScheme; auth runs in this same context so any
+        // cookies / localStorage / session set during login survive
+        // into the capture goto.
+        if (req.auth) {
+          await runTargetAuth(page, req.url, req.auth);
+        }
         await page.goto(req.url, { waitUntil: "networkidle", timeout: 25_000 });
         // Brief settle so chart animations + lazy images land. Live-demo
         // doesn't expose a `waitMs` knob — keep it short.
@@ -207,7 +255,158 @@ function validateRequest(req: RenderDemoRequest): ValidatedRequest | RenderDemoF
       error: `Template "${template.id}" doesn't support theme "${theme}".`,
     };
   }
+  // Auth field, if present, has to declare a valid type.
+  if (req.auth !== undefined) {
+    const authError = validateAuth(req.auth);
+    if (authError) return authError;
+  }
   return { ok: true, template, theme };
+}
+
+function validateAuth(auth: unknown): RenderDemoFailure | null {
+  if (!auth || typeof auth !== "object") {
+    return { ok: false, status: 400, error: "`auth` must be an object when provided." };
+  }
+  const a = auth as Record<string, unknown>;
+  if (a.type === "api") {
+    if (typeof a.url !== "string" || a.url.length === 0) {
+      return { ok: false, status: 400, error: "`auth.url` is required for type=api." };
+    }
+    if (a.body === undefined) {
+      return { ok: false, status: 400, error: "`auth.body` is required for type=api." };
+    }
+    return null;
+  }
+  if (a.type === "form") {
+    for (const field of [
+      "url",
+      "emailField",
+      "passwordField",
+      "submitButton",
+      "email",
+      "password",
+    ] as const) {
+      const value = a[field];
+      if (typeof value !== "string" || value.length === 0) {
+        return {
+          ok: false,
+          status: 400,
+          error: `\`auth.${field}\` is required for type=form.`,
+        };
+      }
+    }
+    return null;
+  }
+  if (a.type === "session") {
+    const noFields = !a.cookies && !a.localStorage && !a.sessionStorage;
+    if (noFields) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          "`auth` (type=session) needs at least one of cookies / localStorage / sessionStorage.",
+      };
+    }
+    return null;
+  }
+  return {
+    ok: false,
+    status: 400,
+    error: "`auth.type` must be one of: 'api', 'form', 'session'.",
+  };
+}
+
+/**
+ * Run target-app authentication inside the capture context, before the
+ * `goto(req.url)`. Mirrors the `apiLogin` / `formLogin` / `injectSession`
+ * helpers from `shotcraft/auth` — see `packages/core/src/auth/`.
+ *
+ * Errors thrown here propagate up to the engine's failure path so the
+ * route returns a useful 5xx with the message. Credentials are NEVER
+ * logged from this function.
+ */
+async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAuth): Promise<void> {
+  // Most auth flows need to be on the same origin as the captured URL
+  // before the cookie / token sets, so navigate to that origin first.
+  const origin = new URL(captureUrl).origin;
+  await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 20_000 });
+
+  if (auth.type === "api") {
+    interface FetchArgs {
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+      body: string;
+    }
+    interface FetchResult {
+      status: number;
+      statusText: string;
+      body: string;
+    }
+    const args: FetchArgs = {
+      url: auth.url,
+      method: auth.method ?? "POST",
+      headers: { "Content-Type": "application/json", ...(auth.headers ?? {}) },
+      body: JSON.stringify(auth.body),
+    };
+    const result = await page.evaluate<FetchResult, FetchArgs>(
+      async (a: FetchArgs): Promise<FetchResult> => {
+        const res = await fetch(a.url, {
+          method: a.method,
+          headers: a.headers,
+          credentials: "include",
+          body: a.body,
+        });
+        return { status: res.status, statusText: res.statusText, body: await res.text() };
+      },
+      args,
+    );
+    const expected = auth.expectStatus ?? 200;
+    if (result.status !== expected) {
+      throw new Error(
+        `auth (api): ${args.method} ${auth.url} returned ${result.status} ${result.statusText}`,
+      );
+    }
+    return;
+  }
+
+  if (auth.type === "form") {
+    await page.goto(auth.url, { waitUntil: "domcontentloaded", timeout: 20_000 });
+    await page.fill(auth.emailField, auth.email, { timeout: 15_000 });
+    await page.fill(auth.passwordField, auth.password, { timeout: 15_000 });
+    const wait = auth.waitForUrl
+      ? page.waitForURL(auth.waitForUrl, { timeout: 15_000 })
+      : auth.waitForSelector
+        ? page.waitForSelector(auth.waitForSelector, { timeout: 15_000 })
+        : page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.click(auth.submitButton, { timeout: 15_000 });
+    await wait;
+    return;
+  }
+
+  // type === "session"
+  if (auth.cookies && auth.cookies.length > 0) {
+    await page.context().addCookies(
+      auth.cookies.map((c) => ({
+        name: c.name,
+        value: c.value,
+        ...(c.domain !== undefined ? { domain: c.domain } : { url: origin }),
+        path: c.path ?? "/",
+      })),
+    );
+  }
+  if (auth.localStorage) {
+    const entries = Object.entries(auth.localStorage);
+    await page.evaluate((items: ReadonlyArray<readonly [string, string]>) => {
+      for (const [k, v] of items) localStorage.setItem(k, v);
+    }, entries);
+  }
+  if (auth.sessionStorage) {
+    const entries = Object.entries(auth.sessionStorage);
+    await page.evaluate((items: ReadonlyArray<readonly [string, string]>) => {
+      for (const [k, v] of items) sessionStorage.setItem(k, v);
+    }, entries);
+  }
 }
 
 async function validateUrl(raw: string): Promise<{ ok: true } | RenderDemoFailure> {

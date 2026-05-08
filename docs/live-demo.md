@@ -61,13 +61,67 @@ Body:
   "caption": "Hero text",
   "subtitle": "Optional second line",
   "templateId": "readme-hero",
-  "theme": "dark"
+  "theme": "dark",
+  "auth": {
+    /* optional — see "Target-app authentication" below */
+  }
 }
 ```
 
 Returns the rendered PNG with `Content-Type: image/png` on success, or
 JSON `{ error: string }` with a 4xx/5xx status. Response headers
 `X-Shotcraft-Template` + `X-Shotcraft-Theme` echo what was rendered.
+
+### Target-app authentication
+
+If the URL you want to capture sits behind a login wall, send an
+`auth` field with the credentials. Shotcraft logs in inside the
+capture context before the page navigation. Three flavors:
+
+```jsonc
+// API login — POSTs JSON to your auth endpoint, follows the Set-Cookie
+{
+  "auth": {
+    "type": "api",
+    "url": "/api/auth/login",
+    "body": { "email": "demo@example.com", "password": "..." },
+    "method": "POST",                 // optional, defaults POST
+    "headers": { "X-Tenant": "..." }, // optional, merged onto Content-Type
+    "expectStatus": 200               // optional, throws on mismatch
+  }
+}
+
+// Form login — fills a real HTML form
+{
+  "auth": {
+    "type": "form",
+    "url": "/login",
+    "emailField": "input[name=email]",
+    "passwordField": "input[name=password]",
+    "submitButton": "button[type=submit]",
+    "email": "demo@example.com",
+    "password": "...",
+    "waitForUrl": "**/dashboard"      // optional
+  }
+}
+
+// Pre-existing session — no actual login round-trip
+{
+  "auth": {
+    "type": "session",
+    "cookies": [
+      { "name": "sid", "value": "...", "domain": "your.app" }
+    ],
+    "localStorage": { "tour-dismissed": "1" }
+  }
+}
+```
+
+> **`SHOTCRAFT_LIVE_DEMO_TOKEN` is required when `auth` is supplied.** The
+> server refuses authenticated renders without the gate. Reasoning: a
+> server that submits arbitrary credentials to arbitrary URLs without an
+> access gate is a credential-stuffing tool. Setting the token narrows
+> usage to people who know it.
 
 ### Hard limits
 
@@ -77,6 +131,8 @@ JSON `{ error: string }` with a 4xx/5xx status. Response headers
   endpoints (`169.254.169.254`) are rejected to block SSRF against the
   host's internal network.
 - Caption max 240 chars, subtitle max 480 chars, URL max 2048 chars.
+- `auth` field requires `SHOTCRAFT_LIVE_DEMO_TOKEN` set on the server.
+  Credentials are never logged.
 
 ### Templates
 
