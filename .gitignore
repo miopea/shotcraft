@@ -29,9 +29,9 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
-# Render outputs (examples generate these)
-examples/*/screenshots/raw/
-examples/*/screenshots/out/
+# Render outputs (examples generate these). Curated copies that ship in
+# the repo (the README hero, OG card, etc.) live under `assets/`.
+examples/*/screenshots/
 
 # Docs site build (Astro Starlight default)
 docs/.astro/

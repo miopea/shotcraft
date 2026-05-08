@@ -18,6 +18,11 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        # Snapshot tests in core + every template launch a real Chromium.
+        # `pnpm install` doesn't trigger Playwright's browser download
+        # because the install hook isn't on `allowBuilds`.
+        run: pnpm exec playwright install --with-deps chromium
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check

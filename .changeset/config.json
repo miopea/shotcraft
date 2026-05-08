@@ -7,5 +7,10 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["docs", "@shotcraft/example-budgetbug"]
+  "ignore": [
+    "@shotcraft/docs",
+    "@shotcraft/example-budgetbug",
+    "@shotcraft/example-shotcraft-docs",
+    "@shotcraft/web"
+  ]
 }

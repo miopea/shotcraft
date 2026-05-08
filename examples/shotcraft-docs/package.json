@@ -1,0 +1,31 @@
+{
+  "name": "@shotcraft/example-shotcraft-docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shotcraft example — eat-our-own-dogfood. Drives the Shotcraft docs site through readme-hero + social-og-card templates to produce the README hero and OG card you see at the top of the project's GitHub repo.",
+  "homepage": "https://shotcraft.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miopea/shotcraft.git",
+    "directory": "examples/shotcraft-docs"
+  },
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "screenshots": "shotcraft",
+    "screenshots:capture": "shotcraft capture",
+    "screenshots:render": "shotcraft render",
+    "doctor": "shotcraft doctor",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@shotcraft/template-readme-hero": "workspace:*",
+    "@shotcraft/template-social-og-card": "workspace:*",
+    "@types/node": "^22.7.0",
+    "shotcraft": "workspace:*",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
