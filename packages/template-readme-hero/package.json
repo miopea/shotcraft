@@ -1,6 +1,6 @@
 {
   "name": "@shotcraft/template-readme-hero",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Shotcraft template — GitHub README hero composite. 1280×640 landscape, two-pane layout, dark + light variants for prefers-color-scheme.",
   "keywords": [
     "shotcraft",

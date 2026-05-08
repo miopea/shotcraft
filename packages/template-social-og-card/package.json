@@ -1,6 +1,6 @@
 {
   "name": "@shotcraft/template-social-og-card",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Shotcraft template — Open Graph / Twitter card composite. 1200×630 landscape, caption-dominant layout optimized for thumbnail legibility.",
   "keywords": [
     "shotcraft",
