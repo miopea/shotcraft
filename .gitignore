@@ -45,10 +45,10 @@ docs/.astro/
 # Changesets — `.changeset/*.md` files ARE the source of truth (they describe
 # pending version bumps) and must be committed. Nothing to ignore here.
 
-# Claude Code / MCP — operator-machine state (commands, skills, MCP servers,
-# local settings). `.claude/plans/` is the only subdir we track, since plans
-# describe the project itself.
-.claude/commands/
+# Claude Code / MCP — most subdirs are operator-machine state, but
+# `.claude/commands/` and `.claude/plans/` are project-shared:
+# slash commands like `/deploy` describe how to operate this repo,
+# plans capture in-flight design.
 .claude/skills/
 .claude/settings.local.json
 .mcp.json
