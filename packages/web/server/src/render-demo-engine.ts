@@ -715,7 +715,10 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
   }
 
   if (auth.type === "form") {
-    await page.goto(auth.url, { waitUntil: "domcontentloaded", timeout: 20_000 });
+    // Allow relative URLs like "/login" — resolve against the capture
+    // origin so users don't have to type the full host twice.
+    const formUrl = new URL(auth.url, origin).toString();
+    await page.goto(formUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
     await page.fill(auth.emailField, auth.email, { timeout: 15_000 });
     await page.fill(auth.passwordField, auth.password, { timeout: 15_000 });
     const wait = auth.waitForUrl
