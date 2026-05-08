@@ -1,8 +1,16 @@
 name: Release
 
+# Manual-trigger only. We don't publish on every push — releases are
+# operator-driven via Changesets. To cut a release: ensure a
+# `.changeset/*.md` file describes the bump, then run this workflow
+# from the Actions tab (or `gh workflow run release.yml`).
+#
+# To go back to push-triggered: set up a PAT secret that has `repo`
+# scope and use it for GITHUB_TOKEN (changesets/action@v1's PR
+# creation needs more than the default GITHUB_TOKEN provides on
+# private repos).
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
