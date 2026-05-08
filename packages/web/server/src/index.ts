@@ -45,16 +45,25 @@ app.use("/api/render-demo", renderDemoRouter);
 // In production, serve the Vite-built client. In dev, the Vite dev server
 // runs separately on its own port and proxies /api to here.
 if (process.env.NODE_ENV === "production") {
+  // Server bundle lives at `server/dist/index.js`; Vite emits the client to
+  // `dist/client/` at the package root (see client/vite.config.ts). Two
+  // hops up from `server/dist/` → package root → `dist/client/`.
   const here = fileURLToPath(new URL(".", import.meta.url));
-  const clientDist = join(here, "../client");
+  const clientDist = join(here, "../../dist/client");
   app.use(express.static(clientDist));
-  // SPA fallback — every non-API GET serves index.html.
+  // SPA fallback — every non-API GET serves index.html so React Router can
+  // claim the path.
   app.get(/^\/(?!api).*/, (_req, res) => {
     res.sendFile(join(clientDist, "index.html"));
   });
 }
 
-app.listen(PORT, () => {
+// Bind to all interfaces (`0.0.0.0`) so the server is reachable on both
+// `localhost` and any container/VM-internal IPs. The hosted production
+// deployment fronts this with a reverse proxy; locally it lets the dev
+// experience "just work" regardless of which interface the loopback
+// resolves to.
+app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `[shotcraft-web] listening on http://localhost:${PORT}` +
       (LIVE_DEMO_ENABLED ? " (live-demo ENABLED)" : ""),

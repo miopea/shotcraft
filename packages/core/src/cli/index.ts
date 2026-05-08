@@ -13,14 +13,15 @@
  *   shotcraft --version
  *   shotcraft --help
  *
- * Phase 2 + 3 implement: init, capture, render, doctor, plus the no-arg
- * run path (capture → render). Phases 4-7 fill in list, dev, web.
+ * Phases 2–8 implement: init, capture, render, doctor, web, plus the no-arg
+ * run path (capture → render). Future phases fill in list, dev.
  */
 
 import { runInit } from "./commands/init.js";
 import { runCaptureCommand } from "./commands/capture.js";
 import { runRenderCommand } from "./commands/render.js";
 import { runDoctor } from "./commands/doctor.js";
+import { runWebCommand } from "./commands/web.js";
 import { run } from "../run.js";
 import { loadConfig } from "../config/load.js";
 import { dirname } from "node:path";
@@ -175,8 +176,11 @@ async function dispatch(args: ParsedArgs): Promise<void> {
       });
       return;
     }
+    case "web": {
+      await runWebCommand();
+      return;
+    }
     case "dev":
-    case "web":
     case "list":
       notImplemented(args.subcommand);
     // eslint-disable-next-line no-fallthrough

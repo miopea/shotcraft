@@ -40,6 +40,11 @@ docs/dist/
 # Source of truth lives in `packages/template-*/samples/`.
 docs/public/samples/
 
+# @shotcraft/web build artifacts + same sample-copy pattern as docs/.
+packages/web/dist/
+packages/web/server/dist/
+packages/web/client/public/samples/
+
 # Changesets — `.changeset/*.md` files ARE the source of truth (they describe
 # pending version bumps) and must be committed. Nothing to ignore here.
 
