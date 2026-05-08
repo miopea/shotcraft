@@ -41,6 +41,10 @@
     "./template": {
       "types": "./dist/template/index.d.ts",
       "import": "./dist/template/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js"
     }
   },
   "bin": {

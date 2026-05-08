@@ -21,7 +21,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "shotcraft";
+import { apiLogin, chain, defineConfig, injectSession } from "shotcraft";
 
 // ---------------------------------------------------------------------------
 // .env loader — small enough to inline; avoids pulling in `dotenv` just for
@@ -57,52 +57,45 @@ const BASE_URL = process.env.BUDGETBUG_BASE_URL ?? "http://localhost:5173";
 const EMAIL = process.env.BUDGETBUG_DEMO_EMAIL ?? "demo@budgetbug.live";
 const PASSWORD = process.env.BUDGETBUG_DEMO_PASSWORD;
 
+if (!PASSWORD) {
+  throw new Error(
+    "BUDGETBUG_DEMO_PASSWORD is not set. Copy `.env.example` → `.env` and fill it in.",
+  );
+}
+
 // BudgetBug's storage keys — mirrored from
 // `~/projects/personal/budgetbug/client/src/lib/`.
 const THEME_STORAGE_KEY = "budgetbug-theme";
 const ONBOARDING_KEY = "budgetbug-onboarding-completed";
 
+// Bugsy onboarding overlay reads this localStorage entry via
+// `readOfflineCache(KEY)`, which expects a `{ data, cachedAt }` envelope.
+// Pre-marking it dismissed keeps the overlay off our captures.
+const ONBOARDING_DISMISSED_VALUE = JSON.stringify({
+  data: true,
+  cachedAt: new Date().toISOString(),
+});
+
 export default defineConfig({
   target: BASE_URL,
 
   /**
-   * One-time setup. Runs once per (viewport × theme) capture group, before
-   * any screen is captured. We log in by hitting BudgetBug's auth API
-   * directly (faster + more reliable than driving the login form), then
-   * pre-mark the onboarding tour as completed so it doesn't overlay every
-   * screen.
+   * One-time setup, composed with Shotcraft's auth helpers:
+   *   - `apiLogin` POSTs to BudgetBug's `/api/auth/login` with demo creds.
+   *   - `injectSession` pre-marks the Bugsy onboarding tour as completed.
+   *
+   * This is the recommended pattern. For weirder auth flows fall back
+   * to writing your own `setup: async (page) => { ... }`.
    */
-  setup: async (page) => {
-    if (!PASSWORD) {
-      throw new Error(
-        "BUDGETBUG_DEMO_PASSWORD is not set. Copy `.env.example` → `.env` and fill it in.",
-      );
-    }
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
-    const result = await page.evaluate(
-      async ({ email, password }) => {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ email, password }),
-        });
-        const text = await res.text();
-        return { status: res.status, body: text };
-      },
-      { email: EMAIL, password: PASSWORD },
-    );
-    if (result.status !== 200) {
-      throw new Error(`Login failed (${result.status}): ${result.body}`);
-    }
-    // Pre-mark the Bugsy onboarding tour as completed. The OnboardingOverlay
-    // component reads via `readOfflineCache(KEY)` which expects a
-    // `{ data, cachedAt }` envelope.
-    await page.evaluate((key) => {
-      const entry = { data: true, cachedAt: new Date().toISOString() };
-      localStorage.setItem(key, JSON.stringify(entry));
-    }, ONBOARDING_KEY);
-  },
+  setup: chain(
+    apiLogin({
+      url: "/api/auth/login",
+      body: { email: EMAIL, password: PASSWORD },
+    }),
+    injectSession({
+      localStorage: { [ONBOARDING_KEY]: ONBOARDING_DISMISSED_VALUE },
+    }),
+  ),
 
   /**
    * Imperative theme hook. BudgetBug's ThemeContext reads `localStorage` on

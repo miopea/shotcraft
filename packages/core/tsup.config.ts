@@ -8,6 +8,7 @@ export default defineConfig({
     "render/index": "src/render/index.ts",
     "template/index": "src/template/index.ts",
     "capture/index": "src/capture/index.ts",
+    "auth/index": "src/auth/index.ts",
   },
   format: ["esm"],
   dts: true,

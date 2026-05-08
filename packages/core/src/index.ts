@@ -51,3 +51,10 @@ export type { LoadedTemplate, LoadTemplatesOptions } from "./template/load.js";
 export { run } from "./run.js";
 export type { RunOptions } from "./run.js";
 export type { ShotcraftTemplate } from "./template/types.js";
+export { formLogin, apiLogin, injectSession, chain } from "./auth/index.js";
+export type {
+  FormLoginOptions,
+  ApiLoginOptions,
+  InjectSessionOptions,
+  SessionCookie,
+} from "./auth/types.js";

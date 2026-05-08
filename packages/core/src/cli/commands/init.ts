@@ -5,6 +5,9 @@ import { resolve } from "node:path";
 const DEFAULT_TARGET_PATH = "shotcraft.config.ts";
 
 const TEMPLATE = `import { defineConfig } from "shotcraft";
+// Auth helpers — uncomment whichever fits your login flow. See:
+//   https://shotcraft.dev/config/#auth-helpers
+// import { apiLogin, formLogin, injectSession, chain } from "shotcraft";
 
 /**
  * Shotcraft config. Captures from your live app — point Shotcraft at a
@@ -23,30 +26,48 @@ export default defineConfig({
   target: "http://localhost:5173",
 
   /**
-   * Setup hook — full Playwright \`Page\` access. Use it to log in, prefill
-   * localStorage, dismiss tutorials. This is the only auth abstraction
-   * Shotcraft ships; it covers OAuth, email+password, magic links, JWT,
-   * biometric, anything you can drive with Playwright.
+   * Setup hook — runs once before captures, full Playwright \`Page\` access.
+   *
+   * Three common patterns ship as helpers (see commented imports above):
+   *
+   *   API-based login (most common):
+   *     setup: apiLogin({
+   *       url: "/api/auth/login",
+   *       body: {
+   *         email: process.env.DEMO_EMAIL,
+   *         password: process.env.DEMO_PASSWORD,
+   *       },
+   *     })
+   *
+   *   HTML form login:
+   *     setup: formLogin({
+   *       url: "/login",
+   *       emailField: "input[name=email]",
+   *       passwordField: "input[name=password]",
+   *       submitButton: "button[type=submit]",
+   *       email: process.env.DEMO_EMAIL!,
+   *       password: process.env.DEMO_PASSWORD!,
+   *       waitForUrl: /\\/dashboard$/,
+   *     })
+   *
+   *   Pre-existing session token (CI-baked secret, dev token):
+   *     setup: injectSession({
+   *       cookies: [{
+   *         name: "auth_token",
+   *         value: process.env.DEMO_AUTH_TOKEN!,
+   *         domain: "localhost",
+   *       }],
+   *       localStorage: { "onboarding-completed": "true" },
+   *     })
+   *
+   * Compose multiple steps with \`chain(...)\`. For weirder flows (OAuth
+   * popup, magic link, biometric), write your own:
+   *
+   *     setup: async (page) => { ... full Playwright Page here ... }
    */
   setup: async (page) => {
-    // Example: log in by hitting your auth API directly. Replace with whatever
-    // matches your app's flow.
-    //
-    // await page.goto("http://localhost:5173/login", {
-    //   waitUntil: "domcontentloaded",
-    // });
-    // await page.evaluate(async () => {
-    //   const res = await fetch("/api/auth/login", {
-    //     method: "POST",
-    //     headers: { "Content-Type": "application/json" },
-    //     credentials: "include",
-    //     body: JSON.stringify({
-    //       email: "demo@example.com",
-    //       password: "demo-password",
-    //     }),
-    //   });
-    //   if (!res.ok) throw new Error("Login failed: " + (await res.text()));
-    // });
+    // Replace with one of the patterns above, or your own login flow.
+    void page;
   },
 
   screens: [
@@ -66,8 +87,8 @@ export default defineConfig({
 
   /**
    * Templates compose your captures into final marketing images. Install
-   * what you need and reference them here. (Templates land in Shotcraft v0.2;
-   * \`shotcraft capture\` runs without any.)
+   * what you need and reference them here. \`shotcraft capture\` runs
+   * fine without any.
    */
   // templates: [
   //   "@shotcraft/template-app-store-iphone",
