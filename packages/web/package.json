@@ -25,7 +25,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "express": "^5.0.0"
+    "express": "^5.0.0",
+    "playwright": "^1.49.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

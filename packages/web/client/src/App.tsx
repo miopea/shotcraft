@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { Home } from "./pages/Home.js";
 import { Gallery } from "./pages/Gallery.js";
 import { Builder } from "./pages/Builder.js";
+import { Demo } from "./pages/Demo.js";
 
 export function App() {
   return (
@@ -18,6 +19,9 @@ export function App() {
             </NavLink>
             <NavLink to="/builder" className={({ isActive }) => (isActive ? "active" : "")}>
               Config builder
+            </NavLink>
+            <NavLink to="/demo" className={({ isActive }) => (isActive ? "active" : "")}>
+              Live demo
             </NavLink>
             <a
               href="https://github.com/miopea/shotcraft/tree/main/docs"
@@ -37,6 +41,7 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/templates" element={<Gallery />} />
           <Route path="/builder" element={<Builder />} />
+          <Route path="/demo" element={<Demo />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

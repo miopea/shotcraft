@@ -8,7 +8,9 @@
  * the templates installed and shouldn't need to.
  *
  * Sample images get copied into `public/samples/<id>/` at build time
- * (see `scripts/copy-samples.mjs`).
+ * (see `scripts/copy-samples.mjs`). Wrapper assets (HTML/CSS/SVG) get
+ * copied into `templates/<id>/` by the deploy stage script for the
+ * live-demo render path.
  */
 
 export interface TemplateInfo {
@@ -16,7 +18,12 @@ export interface TemplateInfo {
   pkg: string;
   displayName: string;
   category: "app-store" | "play-store" | "readme" | "social";
+  /** Logical viewport (CSS px) used during capture. */
+  viewport: { width: number; height: number; dpr: number };
+  /** Final composite dimensions in physical px. */
   output: { width: number; height: number };
+  /** Whether to advertise mobile UA / touch / `isMobile` during capture. */
+  isMobile: boolean;
   themes: ReadonlyArray<"dark" | "light">;
   /**
    * Sample PNG URLs relative to the site root, one per theme. Files live
@@ -31,7 +38,9 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
     pkg: "@shotcraft/template-app-store-iphone",
     displayName: 'Apple App Store — iPhone 6.5"',
     category: "app-store",
+    viewport: { width: 428, height: 926, dpr: 3 },
     output: { width: 1284, height: 2778 },
+    isMobile: true,
     themes: ["dark", "light"],
     samples: [
       {
@@ -51,7 +60,9 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
     pkg: "@shotcraft/template-app-store-ipad",
     displayName: 'Apple App Store — iPad 13"',
     category: "app-store",
+    viewport: { width: 1032, height: 1376, dpr: 2 },
     output: { width: 2064, height: 2752 },
+    isMobile: true,
     themes: ["dark", "light"],
     samples: [
       {
@@ -71,7 +82,9 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
     pkg: "@shotcraft/template-play-store-phone",
     displayName: "Google Play — phone",
     category: "play-store",
+    viewport: { width: 360, height: 640, dpr: 3 },
     output: { width: 1080, height: 1920 },
+    isMobile: true,
     themes: ["dark", "light"],
     samples: [
       {
@@ -91,7 +104,9 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
     pkg: "@shotcraft/template-play-store-tablet",
     displayName: 'Google Play — 7" tablet',
     category: "play-store",
+    viewport: { width: 600, height: 960, dpr: 2 },
     output: { width: 1920, height: 1200 },
+    isMobile: true,
     themes: ["dark", "light"],
     samples: [
       {
@@ -111,7 +126,9 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
     pkg: "@shotcraft/template-readme-hero",
     displayName: "GitHub README hero",
     category: "readme",
+    viewport: { width: 428, height: 926, dpr: 2 },
     output: { width: 1280, height: 640 },
+    isMobile: true,
     themes: ["dark", "light"],
     samples: [
       { theme: "dark", url: "/samples/readme-hero/hero-dark.png", filename: "hero-dark.png" },
@@ -123,7 +140,9 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
     pkg: "@shotcraft/template-social-og-card",
     displayName: "Social — Open Graph / Twitter",
     category: "social",
+    viewport: { width: 428, height: 926, dpr: 2 },
     output: { width: 1200, height: 630 },
+    isMobile: true,
     themes: ["dark"],
     samples: [
       {

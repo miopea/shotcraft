@@ -6,6 +6,11 @@ name: Deploy to Azure
 #
 # Required repo secret:
 #   AZURE_WEBAPP_PUBLISH_PROFILE — `az webapp deployment list-publishing-profiles -g bfg-solutions -n shotcraft-web --xml`
+#
+# Live-demo (POST /api/render-demo) is opt-in via the App Service env:
+#   SHOTCRAFT_LIVE_DEMO=1                  # turns the endpoint on
+#   SHOTCRAFT_LIVE_DEMO_TOKEN=<secret>     # optional shared-secret gate
+#   PLAYWRIGHT_BROWSERS_PATH=/home/site/wwwroot/ms-playwright
 
 on:
   push:
@@ -36,15 +41,34 @@ jobs:
       - name: Build @shotcraft/web
         run: pnpm --filter @shotcraft/web build
       - name: Stage deploy bundle
-        # App Service needs a self-contained deploy directory with non-workspace
-        # node_modules. Stage server/dist + dist/client + a minimal package.json
-        # then `npm install --omit=dev` to materialize a clean node_modules.
+        # App Service can't consume the pnpm workspace directly. Stage a
+        # self-contained directory:
+        #   - server/dist + dist/client (server bundle + client bundle)
+        #   - templates/<id>/{wrapper.html,wrapper.css,frames/*}
+        #     (assets the live-demo render path needs)
+        #   - minimal package.json + npm-installed node_modules
+        #   - ms-playwright/ Chromium binaries (so the render path doesn't
+        #     have to download them on first request)
         run: |
           set -euo pipefail
           DEPLOY="$RUNNER_TEMP/shotcraft-web-deploy"
-          rm -rf "$DEPLOY" && mkdir -p "$DEPLOY/server" "$DEPLOY/dist"
+          rm -rf "$DEPLOY" && mkdir -p "$DEPLOY/server" "$DEPLOY/dist" "$DEPLOY/templates"
           cp -r packages/web/server/dist "$DEPLOY/server/dist"
           cp -r packages/web/dist/client "$DEPLOY/dist/client"
+
+          # Bundle each first-party template's wrapper assets so the
+          # live-demo render path can find them at runtime. Frames dir is
+          # optional (the OG-card template doesn't ship its own SVG —
+          # though it does have a copy of the iPhone frame).
+          for tpl in app-store-iphone app-store-ipad play-store-phone play-store-tablet readme-hero social-og-card; do
+            mkdir -p "$DEPLOY/templates/$tpl"
+            cp "packages/template-$tpl/wrapper.html" "$DEPLOY/templates/$tpl/wrapper.html"
+            cp "packages/template-$tpl/wrapper.css" "$DEPLOY/templates/$tpl/wrapper.css"
+            if [ -d "packages/template-$tpl/frames" ]; then
+              cp -r "packages/template-$tpl/frames" "$DEPLOY/templates/$tpl/frames"
+            fi
+          done
+
           cat > "$DEPLOY/package.json" <<'EOF'
           {
             "name": "shotcraft-web-deploy",
@@ -53,11 +77,20 @@ jobs:
             "type": "module",
             "main": "server/dist/index.js",
             "scripts": { "start": "node server/dist/index.js" },
-            "dependencies": { "express": "^5.0.0" },
+            "dependencies": {
+              "express": "^5.0.0",
+              "playwright": "^1.49.0"
+            },
             "engines": { "node": ">=20" }
           }
           EOF
           (cd "$DEPLOY" && npm install --omit=dev --silent)
+
+          # Pre-install Chromium into a path that ships with the zip and
+          # gets pinned via PLAYWRIGHT_BROWSERS_PATH on App Service.
+          export PLAYWRIGHT_BROWSERS_PATH="$DEPLOY/ms-playwright"
+          (cd "$DEPLOY" && npx playwright install --with-deps chromium)
+
           echo "DEPLOY_DIR=$DEPLOY" >> "$GITHUB_ENV"
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3

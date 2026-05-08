@@ -16,6 +16,9 @@ step, no second source of truth to keep in sync.
    first-party templates rendered against a real app.
 5. **[Build your own template](./contributing-templates.md)** — the
    package contract and a 60-line starter.
+6. **[Live demo](./live-demo.md)** — the hosted `/demo` endpoint that
+   runs renders server-side, plus the env vars to enable it on your own
+   deployment.
 
 ## Try it interactively
 
