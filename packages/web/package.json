@@ -1,0 +1,50 @@
+{
+  "name": "@shotcraft/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shotcraft hosted companion — template gallery, interactive config builder, docs, and (in dev) a live-demo renderer. Deployable to Azure App Service or runnable locally via `shotcraft web`.",
+  "homepage": "https://shotcraft.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shotcraft/shotcraft.git",
+    "directory": "packages/web"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./server/dist/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:client": "vite --config client/vite.config.ts",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build --config client/vite.config.ts",
+    "build:server": "tsc -p server/tsconfig.json",
+    "start": "node server/dist/index.js",
+    "typecheck": "tsc -p server/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "express": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.7.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^9.0.1",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^6.26.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.6",
+    "vitest": "^2.1.1"
+  },
+  "peerDependencies": {
+    "shotcraft": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

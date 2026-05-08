@@ -35,6 +35,7 @@ SUBCOMMANDS
   capture                 Run only the capture phase
   render [template-id]    Run only the render phase, optionally for one template
   dev                     Hot-reload preview for template authors
+  web                     Launch the local web companion (gallery, config builder, live demo)
   list                    List installed templates
   doctor                  Sanity-check config + target reachability
 
@@ -81,6 +82,9 @@ switch (subcommand) {
     break;
   case "dev":
     notImplemented("dev");
+    break;
+  case "web":
+    notImplemented("web");
     break;
   case "list":
     notImplemented("list");
