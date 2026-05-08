@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import type { SetupFn, ShotcraftConfig, Theme } from "../config/types.js";
+import { loadTemplates, type LoadedTemplate } from "../template/load.js";
 import { deriveCaptureSpecs, type CaptureSpec, type ResolvedViewport } from "./spec.js";
 
 export interface CaptureRunOptions {
@@ -13,6 +14,12 @@ export interface CaptureRunOptions {
   rawSubdir?: string;
   /** Run Chromium with a head — useful for local debugging. Default: false. */
   headed?: boolean;
+  /**
+   * Pre-loaded templates. If omitted and `config.templates` is non-empty,
+   * `loadTemplates` runs internally. Pass this when capture + render share
+   * the same load pass.
+   */
+  templates?: ReadonlyArray<LoadedTemplate>;
   /**
    * Per-line progress logger. Receives status messages like
    * `"[capture] dashboard (default, dark) → /abs/path.png"`. Default: console.log.
@@ -28,6 +35,8 @@ export interface CaptureResult {
   rawDir: string;
   /** All capture specs that were run (regardless of pass/fail). */
   specs: ReadonlyArray<CaptureSpec>;
+  /** Templates that were loaded for this run (empty when none configured). */
+  templates: ReadonlyArray<LoadedTemplate>;
 }
 
 const DEFAULT_OUTPUT_DIR = "./screenshots";
@@ -52,7 +61,8 @@ export async function runCapture(
   const rawSubdir = options.rawSubdir ?? config.rawSubdir ?? DEFAULT_RAW_SUBDIR;
   const rawDir = resolve(outputDir, rawSubdir);
 
-  const specs = deriveCaptureSpecs(config, rawDir);
+  const templates = await ensureTemplates(config, options, cwd);
+  const specs = deriveCaptureSpecs(config, rawDir, templates);
   await mkdir(rawDir, { recursive: true });
 
   const totalScreens = config.screens.length;
@@ -64,10 +74,20 @@ export async function runCapture(
   try {
     const written = await captureAll(browser, config, specs, log);
     log(`[capture] done — ${written}/${specs.length} PNGs written`);
-    return { written, rawDir, specs };
+    return { written, rawDir, specs, templates };
   } finally {
     await browser.close();
   }
+}
+
+async function ensureTemplates(
+  config: ShotcraftConfig,
+  options: CaptureRunOptions,
+  cwd: string,
+): Promise<ReadonlyArray<LoadedTemplate>> {
+  if (options.templates) return options.templates;
+  if (!config.templates || config.templates.length === 0) return [];
+  return await loadTemplates(config.templates, { cwd });
 }
 
 async function captureAll(

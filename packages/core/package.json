@@ -29,6 +29,18 @@
     "./config": {
       "types": "./dist/config/index.d.ts",
       "import": "./dist/config/index.js"
+    },
+    "./capture": {
+      "types": "./dist/capture/index.d.ts",
+      "import": "./dist/capture/index.js"
+    },
+    "./render": {
+      "types": "./dist/render/index.d.ts",
+      "import": "./dist/render/index.js"
+    },
+    "./template": {
+      "types": "./dist/template/index.d.ts",
+      "import": "./dist/template/index.js"
     }
   },
   "bin": {

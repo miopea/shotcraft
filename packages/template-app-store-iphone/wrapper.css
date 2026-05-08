@@ -1,0 +1,146 @@
+/*
+ * Shotcraft template — Apple App Store iPhone 6.5" composite.
+ *
+ * Canvas is 1284×2778 (App Store iPhone 6.5" tier). Body fills the canvas.
+ * Layout:
+ *   - Caption block: anchored ~12% from top, centered, max-width 80%.
+ *   - Device frame: anchored to lower portion of canvas, 75% wide, 3D-tilted.
+ *
+ * Theme is set by the wrapper's <script> from the URL param: body[data-theme]
+ * flips a CSS custom-property block. Most colors derive from the brand
+ * gradient + caption palette.
+ */
+
+:root {
+  --canvas-w: 1284px;
+  --canvas-h: 2778px;
+  --device-width-pct: 75%;
+  --bg-from: #0f172a;
+  --bg-to: #064e3b;
+  --caption-color: #f1f5f9;
+  --subtitle-color: rgba(241, 245, 249, 0.75);
+}
+
+[data-theme="light"] {
+  --bg-from: #f8fafc;
+  --bg-to: #d1fae5;
+  --caption-color: #0f172a;
+  --subtitle-color: rgba(15, 23, 42, 0.75);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  color: var(--caption-color);
+  overflow: hidden;
+}
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.caption-block {
+  position: absolute;
+  top: 9%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  text-align: center;
+}
+
+.caption {
+  margin: 0;
+  font-size: 96px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--caption-color);
+}
+
+.subtitle {
+  margin: 24px 0 0;
+  font-size: 56px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--subtitle-color);
+}
+
+.device-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5%;
+  display: flex;
+  justify-content: center;
+  /*
+   * Give the perspective transform a deep parent so the vanishing point feels
+   * realistic. Without this, the rotation looks flat / paper-like.
+   */
+  perspective: 2400px;
+  perspective-origin: 50% 50%;
+}
+
+.device {
+  position: relative;
+  width: var(--device-width-pct);
+  transform: rotateY(-9deg) rotateX(3deg) translateZ(0);
+  transform-origin: center;
+  filter: drop-shadow(30px 50px 60px rgba(0, 0, 0, 0.35));
+}
+
+/*
+ * The screen-host clips the captured screen image to the frame's screen area.
+ * The percentages here line up with the frame SVG's `screen-cutout` mask:
+ *   - chassis viewBox is 470 × 1000
+ *   - screen aperture rect: x=20 y=20 w=430 h=960  (rx=58)
+ * → top/bottom inset = 20/1000 = 2%, side inset = 20/470 ≈ 4.25%
+ */
+.screen-host {
+  position: absolute;
+  top: 2%;
+  left: 4.25%;
+  right: 4.25%;
+  bottom: 2%;
+  /* Match the frame's screen-aperture corner radius (58/430 ≈ 13.5% horizontally
+   * → use a fixed 7% for a softer match across resolutions). */
+  border-radius: 7.5%;
+  overflow: hidden;
+  background: #000;
+  z-index: 1;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  /* Reduce aliasing under the perspective transform. */
+  image-rendering: optimizeQuality;
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 2;
+}

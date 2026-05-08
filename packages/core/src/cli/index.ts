@@ -13,13 +13,17 @@
  *   shotcraft --version
  *   shotcraft --help
  *
- * Phase 2 implements: init, capture, doctor (and the no-arg run path delegates
- * to capture for now). Phases 3-7 fill in render, list, dev, web.
+ * Phase 2 + 3 implement: init, capture, render, doctor, plus the no-arg
+ * run path (capture → render). Phases 4-7 fill in list, dev, web.
  */
 
 import { runInit } from "./commands/init.js";
 import { runCaptureCommand } from "./commands/capture.js";
+import { runRenderCommand } from "./commands/render.js";
 import { runDoctor } from "./commands/doctor.js";
+import { run } from "../run.js";
+import { loadConfig } from "../config/load.js";
+import { dirname } from "node:path";
 
 const VERSION = "0.0.0";
 
@@ -118,13 +122,15 @@ async function dispatch(args: ParsedArgs): Promise<void> {
 
   switch (args.subcommand) {
     case undefined:
-    case "run":
-      await runCaptureCommand({
-        ...(args.flags.configFile !== undefined ? { configFile: args.flags.configFile } : {}),
-        headed: args.flags.headed,
-      });
-      process.stdout.write("\nshotcraft: capture phase complete. (render lands in Phase 3.)\n");
+    case "run": {
+      // End-to-end: load config once, do capture then render in a single browser-spanning pass.
+      const { path, config } = await loadConfig(
+        args.flags.configFile !== undefined ? { configFile: args.flags.configFile } : {},
+      );
+      await run(config, { cwd: dirname(path), headed: args.flags.headed });
+      process.stdout.write("\nshotcraft: capture + render complete.\n");
       return;
+    }
     case "init": {
       const result = await runInit({ force: args.flags.force });
       if (result.written) {
@@ -160,7 +166,15 @@ async function dispatch(args: ParsedArgs): Promise<void> {
       process.stdout.write("\nshotcraft doctor: all checks passed.\n");
       return;
     }
-    case "render":
+    case "render": {
+      const filter = args.positional[0];
+      await runRenderCommand({
+        ...(args.flags.configFile !== undefined ? { configFile: args.flags.configFile } : {}),
+        ...(filter !== undefined ? { templateFilter: filter } : {}),
+        headed: args.flags.headed,
+      });
+      return;
+    }
     case "dev":
     case "web":
     case "list":

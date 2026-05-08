@@ -1,5 +1,7 @@
 import type { ShotcraftConfig } from "./config/types.js";
 import { runCapture } from "./capture/runner.js";
+import { runRender } from "./render/runner.js";
+import { loadTemplates } from "./template/load.js";
 
 export interface RunOptions {
   /** Run only the capture phase. */
@@ -10,25 +12,42 @@ export interface RunOptions {
   templateFilter?: string;
   /** Working directory for resolving relative `outputDir` paths. */
   cwd?: string;
+  /** Run Chromium with a head — useful for visually inspecting wrappers. */
+  headed?: boolean;
 }
 
 /**
- * End-to-end runner. Captures every screen × template combination then runs
- * the render phase against each template to produce final composites.
- *
- * Phase 2 ships only the capture half. Calls with `renderOnly` (or the
- * default end-to-end path) currently throw — render lands in Phase 3.
+ * End-to-end runner. Loads templates once, captures every screen × template
+ * combination at each template's viewport, then renders each combination
+ * through its template's wrapper.html to produce the final composites.
  */
 export async function run(config: ShotcraftConfig, options: RunOptions = {}): Promise<void> {
-  if (options.renderOnly) {
-    throw new Error(
-      "shotcraft.run({ renderOnly: true }) — render is not yet implemented (Phase 3).",
-    );
+  const cwd = options.cwd ?? process.cwd();
+  const templates =
+    config.templates && config.templates.length > 0
+      ? await loadTemplates(config.templates, { cwd })
+      : [];
+
+  if (!options.renderOnly) {
+    await runCapture(config, {
+      cwd,
+      headed: options.headed ?? false,
+      templates,
+    });
   }
-  await runCapture(config, options.cwd !== undefined ? { cwd: options.cwd } : {});
+
   if (!options.captureOnly) {
-    // The end-to-end path will compose render in Phase 3; for now we run
-    // capture and emit a clear notice rather than silently no-op.
-    console.log("[shotcraft] capture complete; render phase will run in Phase 3 of the v1 build.");
+    if (templates.length === 0) {
+      console.log(
+        "[shotcraft] no templates configured — skipping render. Add templates to your config to compose composites.",
+      );
+      return;
+    }
+    await runRender(config, {
+      cwd,
+      headed: options.headed ?? false,
+      templates,
+      ...(options.templateFilter !== undefined ? { templateFilter: options.templateFilter } : {}),
+    });
   }
 }

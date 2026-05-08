@@ -32,8 +32,22 @@ export type {
 } from "./config/types.js";
 export { runCapture } from "./capture/runner.js";
 export type { CaptureRunOptions, CaptureResult } from "./capture/runner.js";
-export { deriveCaptureSpecs, resolveDefaults, captureFilename } from "./capture/spec.js";
+export {
+  deriveCaptureSpecs,
+  resolveDefaults,
+  captureFilename,
+  viewportFromTemplate,
+} from "./capture/spec.js";
 export type { CaptureSpec, ResolvedViewport } from "./capture/spec.js";
+export { runRender, buildWrapperUrl, buildCompositeSpecs } from "./render/runner.js";
+export type {
+  RenderRunOptions,
+  RenderResult,
+  CompositeSpec,
+  CompositeOutcome,
+} from "./render/runner.js";
+export { loadTemplates } from "./template/load.js";
+export type { LoadedTemplate, LoadTemplatesOptions } from "./template/load.js";
 export { run } from "./run.js";
 export type { RunOptions } from "./run.js";
 export type { ShotcraftTemplate } from "./template/types.js";
