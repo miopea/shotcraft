@@ -11,12 +11,12 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "pnpm -r --filter './packages/*' build",
+    "build": "pnpm -r build",
     "test": "pnpm -r --filter './packages/*' test",
     "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/src/**/*.{ts,tsx}\"",
-    "format": "prettier --write --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
-    "format:check": "prettier --check --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
-    "typecheck": "pnpm -r --filter './packages/*' typecheck",
+    "format": "prettier --write --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx,ts,json}\" \"docs/src/**/*.{astro,css}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
+    "format:check": "prettier --check --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx,ts,json}\" \"docs/src/**/*.{astro,css}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
+    "typecheck": "pnpm -r typecheck",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish"
   },

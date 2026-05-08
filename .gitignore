@@ -36,6 +36,9 @@ examples/*/screenshots/out/
 # Docs site build (Astro Starlight default)
 docs/.astro/
 docs/dist/
+# Sample PNGs are copied in by scripts/copy-samples.mjs at build time.
+# Source of truth lives in `packages/template-*/samples/`.
+docs/public/samples/
 
 # Changesets — `.changeset/*.md` files ARE the source of truth (they describe
 # pending version bumps) and must be committed. Nothing to ignore here.

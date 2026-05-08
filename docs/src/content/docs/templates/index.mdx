@@ -1,0 +1,198 @@
+---
+title: Templates gallery
+description: Visual previews of every first-party Shotcraft template, rendered against a real app.
+---
+
+Six first-party templates ship today. Each is its own npm package — install
+only the ones you need.
+
+The previews below were rendered by Shotcraft itself against the
+[BudgetBug](https://budgetbug.live) example app. Source for each
+template is in [`packages/template-*`](https://github.com/miopea/shotcraft/tree/main/packages).
+
+## App Store iPhone
+
+Apple's iPhone 6.5" tier — required for App Store Connect submissions.
+
+`@shotcraft/template-app-store-iphone` · 1284 × 2778 · dark + light
+
+<div class="sample-grid">
+  <div class="sample-card">
+    <img
+      src="/samples/app-store-iphone/dashboard-dark.png"
+      alt="App Store iPhone dark sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Dark</strong>
+      <span>1284 × 2778</span>
+    </div>
+  </div>
+  <div class="sample-card">
+    <img
+      src="/samples/app-store-iphone/dashboard-light.png"
+      alt="App Store iPhone light sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Light</strong>
+      <span>1284 × 2778</span>
+    </div>
+  </div>
+</div>
+
+## App Store iPad
+
+Apple's iPad 13" tier — required for App Store Connect submissions when
+your app declares iPad support.
+
+`@shotcraft/template-app-store-ipad` · 2064 × 2752 · dark + light
+
+<div class="sample-grid">
+  <div class="sample-card">
+    <img
+      src="/samples/app-store-ipad/dashboard-dark.png"
+      alt="App Store iPad dark sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Dark</strong>
+      <span>2064 × 2752</span>
+    </div>
+  </div>
+  <div class="sample-card">
+    <img
+      src="/samples/app-store-ipad/dashboard-light.png"
+      alt="App Store iPad light sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Light</strong>
+      <span>2064 × 2752</span>
+    </div>
+  </div>
+</div>
+
+## Play Store phone
+
+Google Play's recommended phone screenshot tier. Brighter Material-coded
+gradient holds attention against Play Store's busy UI.
+
+`@shotcraft/template-play-store-phone` · 1080 × 1920 · dark + light
+
+<div class="sample-grid">
+  <div class="sample-card">
+    <img
+      src="/samples/play-store-phone/dashboard-dark.png"
+      alt="Play Store phone dark sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Dark</strong>
+      <span>1080 × 1920</span>
+    </div>
+  </div>
+  <div class="sample-card">
+    <img
+      src="/samples/play-store-phone/dashboard-light.png"
+      alt="Play Store phone light sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Light</strong>
+      <span>1080 × 1920</span>
+    </div>
+  </div>
+</div>
+
+## Play Store tablet
+
+Google Play's 7" tablet tier (16:10 landscape). Asymmetric two-pane layout
+with the device tilted toward the viewer.
+
+`@shotcraft/template-play-store-tablet` · 1920 × 1200 · dark + light
+
+<div class="sample-grid">
+  <div class="sample-card">
+    <img
+      src="/samples/play-store-tablet/dashboard-dark.png"
+      alt="Play Store tablet dark sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Dark</strong>
+      <span>1920 × 1200</span>
+    </div>
+  </div>
+  <div class="sample-card">
+    <img
+      src="/samples/play-store-tablet/dashboard-light.png"
+      alt="Play Store tablet light sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Light</strong>
+      <span>1920 × 1200</span>
+    </div>
+  </div>
+</div>
+
+## README hero
+
+GitHub README hero image — sized to fit a typical README content column on
+desktop and mobile-rendered docs. Both themes ship as separate composites
+so you can swap with `<picture>` and `prefers-color-scheme`:
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./screenshots/readme-hero/hero-dark.png" />
+  <img src="./screenshots/readme-hero/hero-light.png" alt="..." />
+</picture>
+```
+
+`@shotcraft/template-readme-hero` · 1280 × 640 · dark + light
+
+<div class="sample-grid">
+  <div class="sample-card">
+    <img src="/samples/readme-hero/hero-dark.png" alt="README hero dark sample" loading="lazy" />
+    <div class="meta">
+      <strong>Dark</strong>
+      <span>1280 × 640</span>
+    </div>
+  </div>
+  <div class="sample-card">
+    <img src="/samples/readme-hero/hero-light.png" alt="README hero light sample" loading="lazy" />
+    <div class="meta">
+      <strong>Light</strong>
+      <span>1280 × 640</span>
+    </div>
+  </div>
+</div>
+
+## Open Graph / Twitter card
+
+Open Graph (1200 × 630) — the standard size Twitter, Slack, Discord,
+LinkedIn, Notion, etc. all preview against. Single dark theme by design,
+caption-dominant for thumbnail legibility.
+
+`@shotcraft/template-social-og-card` · 1200 × 630 · dark only
+
+<div class="sample-grid">
+  <div class="sample-card">
+    <img
+      src="/samples/social-og-card/card-dark.png"
+      alt="Social OG card dark sample"
+      loading="lazy"
+    />
+    <div class="meta">
+      <strong>Dark</strong>
+      <span>1200 × 630</span>
+    </div>
+  </div>
+</div>
+
+## Building your own
+
+Templates are regular npm packages. The contract is small — see
+[Build your own template](/contributing/templates/) for the end-to-end
+walkthrough.
