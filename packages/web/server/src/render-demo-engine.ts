@@ -433,7 +433,7 @@ async function runOneAction(page: Page, action: ScreenAction): Promise<void> {
   }
 }
 
-function validateActions(raw: ReadonlyArray<unknown>): RenderDemoFailure | null {
+export function validateActions(raw: ReadonlyArray<unknown>): RenderDemoFailure | null {
   if (!Array.isArray(raw)) {
     return { ok: false, status: 400, error: "`actions` must be an array." };
   }
@@ -840,7 +840,7 @@ const SUBMIT_FALLBACK_SELECTORS: ReadonlyArray<string> = [
  * patterns (role=alert, [aria-live], common Tailwind/Bootstrap error
  * classes). Returns the first non-empty match, capped to 200 chars.
  */
-async function scrapeVisibleAuthError(page: Page): Promise<string | null> {
+export async function scrapeVisibleAuthError(page: Page): Promise<string | null> {
   const result: unknown = await page
     .evaluate(
       `
@@ -875,7 +875,7 @@ async function scrapeVisibleAuthError(page: Page): Promise<string | null> {
   return typeof result === "string" && result.length > 0 ? result : null;
 }
 
-async function fillFirstMatch(
+export async function fillFirstMatch(
   page: Page,
   fieldName: string,
   primary: string,
@@ -899,7 +899,7 @@ async function fillFirstMatch(
   );
 }
 
-async function clickFirstMatch(
+export async function clickFirstMatch(
   page: Page,
   fieldName: string,
   primary: string,
@@ -1421,7 +1421,7 @@ async function discoverViaCommonRoutes(
     }));
 }
 
-function pickShellLength(counts: Map<number, number>, total: number): number | null {
+export function pickShellLength(counts: Map<number, number>, total: number): number | null {
   if (total < 3) return null;
   for (const [len, count] of counts.entries()) {
     if (count >= Math.ceil(total / 2)) return len;
@@ -1584,7 +1584,7 @@ async function discoverViaNavClick(
   return results;
 }
 
-function parseSameOriginHref(href: string, origin: string): string | null {
+export function parseSameOriginHref(href: string, origin: string): string | null {
   let parsed: URL;
   try {
     parsed = new URL(href);
@@ -1597,7 +1597,7 @@ function parseSameOriginHref(href: string, origin: string): string | null {
   return parsed.toString();
 }
 
-function normalizeUrl(raw: string): string | null {
+export function normalizeUrl(raw: string): string | null {
   try {
     const u = new URL(raw);
     u.hash = "";
@@ -1611,13 +1611,13 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
-function pathForResult(u: URL, origin: string): string {
+export function pathForResult(u: URL, origin: string): string {
   if (u.origin !== origin) return u.toString();
   const p = u.pathname + u.search;
   return p.length === 0 ? "/" : p;
 }
 
-function clampInt(raw: unknown, fallback: number, min: number, max: number): number {
+export function clampInt(raw: unknown, fallback: number, min: number, max: number): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return fallback;
   const n = Math.floor(raw);
   if (n < min) return min;
