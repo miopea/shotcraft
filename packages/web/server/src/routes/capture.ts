@@ -16,7 +16,7 @@
  */
 
 import { Router } from "express";
-import { captureScreen, type RenderDemoAuth } from "../render-demo-engine.js";
+import { captureScreen, type RenderDemoAuth, type ScreenAction } from "../render-demo-engine.js";
 
 export const captureRouter: Router = Router();
 
@@ -62,6 +62,10 @@ captureRouter.post("/", (req, res) => {
     | { width?: unknown; height?: unknown; dpr?: unknown }
     | undefined;
 
+  const actions = Array.isArray(body.actions)
+    ? (body.actions as ReadonlyArray<ScreenAction>)
+    : undefined;
+
   void captureScreen({
     url: typeof body.url === "string" ? body.url : "",
     viewport: {
@@ -73,6 +77,7 @@ captureRouter.post("/", (req, res) => {
     ...(body.theme === "dark" || body.theme === "light" ? { theme: body.theme } : {}),
     ...(typeof body.waitMs === "number" ? { waitMs: body.waitMs } : {}),
     ...(auth ? { auth } : {}),
+    ...(actions ? { actions } : {}),
   })
     .then((result) => {
       if (!result.ok) {

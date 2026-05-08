@@ -33,12 +33,27 @@ const DEFAULT_AUTH: AuthState = {
   localStorageJson: "",
 };
 
+/**
+ * Per-screen action — runs in the captured page after `goto()` and
+ * before the screenshot. Mirrors the small subset of Playwright the
+ * server's engine knows how to drive safely.
+ */
+export type ScreenAction =
+  | { id: string; type: "click"; selector: string; timeoutMs?: number }
+  | { id: string; type: "fill"; selector: string; value: string; timeoutMs?: number }
+  | { id: string; type: "press"; selector: string; key: string; timeoutMs?: number }
+  | { id: string; type: "wait"; ms: number }
+  | { id: string; type: "waitForSelector"; selector: string; timeoutMs?: number }
+  | { id: string; type: "waitForUrl"; url: string; timeoutMs?: number }
+  | { id: string; type: "scroll"; selector?: string; y?: number };
+
 interface ScreenInput {
   id: string;
   route: string;
   name: string;
   caption: string;
   subtitle: string;
+  actions: ScreenAction[];
 }
 
 interface ScreenCapture {
@@ -69,7 +84,7 @@ function rid(): string {
 }
 
 const DEFAULT_SCREENS: ReadonlyArray<ScreenInput> = [
-  { id: rid(), route: "/", name: "01-home", caption: "Welcome", subtitle: "" },
+  { id: rid(), route: "/", name: "01-home", caption: "Welcome", subtitle: "", actions: [] },
 ];
 
 export function Crawler() {
@@ -120,6 +135,7 @@ export function Crawler() {
         name: `${String(idx).padStart(2, "0")}-screen`,
         caption: "",
         subtitle: "",
+        actions: [],
       },
     ]);
   };
@@ -185,6 +201,8 @@ export function Crawler() {
     const url = joinUrl(target, screen.route);
     const authPayload = includeAuth ? buildAuthPayload() : null;
 
+    // Strip per-action client `id` before sending — server doesn't need it.
+    const wireActions = screen.actions.map(({ id: _id, ...rest }) => rest);
     const res = await fetch("/api/capture", {
       method: "POST",
       headers,
@@ -194,6 +212,7 @@ export function Crawler() {
         isMobile: captureTemplate.isMobile,
         theme: captureTheme,
         ...(authPayload ? { auth: authPayload } : {}),
+        ...(wireActions.length > 0 ? { actions: wireActions } : {}),
       }),
     });
 
@@ -444,56 +463,33 @@ export function Crawler() {
       <section className="crawler-step">
         <h2>2. Screens</h2>
         <p className="field-hint" style={{ marginTop: 0 }}>
-          One row per screen to capture. <code>name</code> is the file-name stem; <code>route</code>
-          is appended to the base URL. Edit captions/subtitles before or after capturing — they only
-          matter at render time.
+          One card per screen to capture. <code>name</code> is the file-name stem;{" "}
+          <code>route</code> is joined onto the base URL. Captions / subtitles can be edited before
+          or after capturing. Need to click into a modal or fill a form before the screenshot? Use
+          the actions list at the bottom of each card.
         </p>
 
-        <div className="screens-table">
-          <div className="screens-row screens-row-header">
-            <div>Route</div>
-            <div>Name</div>
-            <div>Caption</div>
-            <div>Subtitle</div>
-            <div>Status</div>
-            <div></div>
-          </div>
+        <div className="screen-cards">
           {screens.map((s) => {
             const status = progress[s.id]?.status ?? "queued";
             const error = progress[s.id]?.error;
             const cap = captures[s.id];
             return (
-              <div key={s.id}>
-                <div className="screens-row">
-                  <input
-                    type="text"
-                    value={s.route}
-                    onChange={(e) => updateScreen(s.id, { route: e.target.value })}
-                    placeholder="/"
-                    disabled={isDisabled}
-                  />
-                  <input
-                    type="text"
-                    value={s.name}
-                    onChange={(e) => updateScreen(s.id, { name: e.target.value })}
-                    disabled={isDisabled}
-                  />
-                  <input
-                    type="text"
-                    value={s.caption}
-                    onChange={(e) => updateScreen(s.id, { caption: e.target.value })}
-                    placeholder="Headline"
-                    disabled={isDisabled}
-                  />
-                  <input
-                    type="text"
-                    value={s.subtitle}
-                    onChange={(e) => updateScreen(s.id, { subtitle: e.target.value })}
-                    placeholder="(optional)"
-                    disabled={isDisabled}
-                  />
-                  <span className={`status status-${status}`}>{status}</span>
-                  <div className="screens-row-actions">
+              <article key={s.id} className="screen-card">
+                <header className="screen-card-header">
+                  <div className="screen-card-title">
+                    <input
+                      type="text"
+                      className="screen-name-input"
+                      value={s.name}
+                      onChange={(e) => updateScreen(s.id, { name: e.target.value })}
+                      placeholder="01-home"
+                      disabled={isDisabled}
+                      aria-label="Screen name"
+                    />
+                    <span className={`status status-${status}`}>{status}</span>
+                  </div>
+                  <div className="screen-card-actions">
                     {cap && (
                       <button type="button" onClick={() => void retake(s)} disabled={isDisabled}>
                         Retake
@@ -508,18 +504,58 @@ export function Crawler() {
                       ✕
                     </button>
                   </div>
+                </header>
+
+                <div className="screen-card-grid">
+                  <div className="field">
+                    <label>Route</label>
+                    <input
+                      type="text"
+                      value={s.route}
+                      onChange={(e) => updateScreen(s.id, { route: e.target.value })}
+                      placeholder="/"
+                      disabled={isDisabled}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Caption</label>
+                    <input
+                      type="text"
+                      value={s.caption}
+                      onChange={(e) => updateScreen(s.id, { caption: e.target.value })}
+                      placeholder="Headline shown over the device frame"
+                      disabled={isDisabled}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Subtitle (optional)</label>
+                    <input
+                      type="text"
+                      value={s.subtitle}
+                      onChange={(e) => updateScreen(s.id, { subtitle: e.target.value })}
+                      placeholder=""
+                      disabled={isDisabled}
+                    />
+                  </div>
                 </div>
+
+                <ScreenActionsEditor
+                  actions={s.actions}
+                  disabled={isDisabled}
+                  onChange={(next) => updateScreen(s.id, { actions: next })}
+                />
+
                 {error && (
-                  <div className="screens-row-error" role="alert">
+                  <div className="screen-card-error" role="alert">
                     {error}
                   </div>
                 )}
                 {cap && (
-                  <div className="screens-row-preview">
+                  <div className="screen-card-preview">
                     <img src={cap.rawBlobUrl} alt={`${s.name} raw capture`} />
                   </div>
                 )}
-              </div>
+              </article>
             );
           })}
         </div>
@@ -787,6 +823,252 @@ function AuthFieldset({ auth, update, disabled }: AuthFieldsetProps) {
       )}
     </fieldset>
   );
+}
+
+interface ScreenActionsEditorProps {
+  actions: ScreenAction[];
+  disabled: boolean;
+  onChange: (next: ScreenAction[]) => void;
+}
+
+const ACTION_LABELS: Record<ScreenAction["type"], string> = {
+  click: "click(selector)",
+  fill: "fill(selector, value)",
+  press: "press(selector, key)",
+  wait: "wait(ms)",
+  waitForSelector: "waitForSelector(selector)",
+  waitForUrl: "waitForUrl(url)",
+  scroll: "scroll(selector? | y?)",
+};
+
+function newAction(type: ScreenAction["type"]): ScreenAction {
+  const id = rid();
+  switch (type) {
+    case "click":
+      return { id, type, selector: "" };
+    case "fill":
+      return { id, type, selector: "", value: "" };
+    case "press":
+      return { id, type, selector: "", key: "Enter" };
+    case "wait":
+      return { id, type, ms: 1000 };
+    case "waitForSelector":
+      return { id, type, selector: "" };
+    case "waitForUrl":
+      return { id, type, url: "" };
+    case "scroll":
+      return { id, type, y: 0 };
+  }
+}
+
+function ScreenActionsEditor({ actions, disabled, onChange }: ScreenActionsEditorProps) {
+  const [open, setOpen] = useState(actions.length > 0);
+
+  const update = (id: string, patch: Partial<ScreenAction>) => {
+    onChange(actions.map((a) => (a.id === id ? ({ ...a, ...patch } as ScreenAction) : a)));
+  };
+  const remove = (id: string) => onChange(actions.filter((a) => a.id !== id));
+  const move = (id: string, dir: -1 | 1) => {
+    const idx = actions.findIndex((a) => a.id === id);
+    if (idx === -1) return;
+    const target = idx + dir;
+    if (target < 0 || target >= actions.length) return;
+    const next = actions.slice();
+    [next[idx], next[target]] = [next[target] as ScreenAction, next[idx] as ScreenAction];
+    onChange(next);
+  };
+  const add = (type: ScreenAction["type"]) => {
+    onChange([...actions, newAction(type)]);
+    setOpen(true);
+  };
+
+  return (
+    <div className="actions-editor">
+      <button
+        type="button"
+        className="actions-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? "▾" : "▸"} Actions before screenshot
+        {actions.length > 0 ? ` (${actions.length})` : ""}
+      </button>
+      {open && (
+        <div className="actions-body">
+          {actions.length === 0 && (
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Add steps that run after navigation, before the screenshot. Useful for clicking into
+              modals, filling search inputs, dismissing tooltips, etc.
+            </p>
+          )}
+          {actions.map((action, i) => (
+            <div key={action.id} className="action-row">
+              <span className="action-index">{i + 1}.</span>
+              <span className="action-type">{ACTION_LABELS[action.type]}</span>
+              <ActionFields action={action} update={update} disabled={disabled} />
+              <div className="action-row-tools">
+                <button
+                  type="button"
+                  aria-label="Move up"
+                  onClick={() => move(action.id, -1)}
+                  disabled={disabled || i === 0}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  aria-label="Move down"
+                  onClick={() => move(action.id, 1)}
+                  disabled={disabled || i === actions.length - 1}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  aria-label="Remove action"
+                  className="remove"
+                  onClick={() => remove(action.id)}
+                  disabled={disabled}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="action-add">
+            <span className="field-hint" style={{ margin: 0 }}>
+              Add:
+            </span>
+            {(Object.keys(ACTION_LABELS) as ScreenAction["type"][]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="action-add-btn"
+                onClick={() => add(t)}
+                disabled={disabled}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ActionFieldsProps {
+  action: ScreenAction;
+  update: (id: string, patch: Partial<ScreenAction>) => void;
+  disabled: boolean;
+}
+
+function ActionFields({ action, update, disabled }: ActionFieldsProps) {
+  if (action.type === "click" || action.type === "waitForSelector") {
+    return (
+      <input
+        type="text"
+        className="action-input"
+        value={action.selector}
+        placeholder='button[aria-label="Open menu"]'
+        onChange={(e) => update(action.id, { selector: e.target.value })}
+        disabled={disabled}
+      />
+    );
+  }
+  if (action.type === "fill") {
+    return (
+      <>
+        <input
+          type="text"
+          className="action-input"
+          value={action.selector}
+          placeholder="input[name=q]"
+          onChange={(e) => update(action.id, { selector: e.target.value })}
+          disabled={disabled}
+        />
+        <input
+          type="text"
+          className="action-input"
+          value={action.value}
+          placeholder="value"
+          onChange={(e) => update(action.id, { value: e.target.value })}
+          disabled={disabled}
+        />
+      </>
+    );
+  }
+  if (action.type === "press") {
+    return (
+      <>
+        <input
+          type="text"
+          className="action-input"
+          value={action.selector}
+          placeholder="input[name=q]"
+          onChange={(e) => update(action.id, { selector: e.target.value })}
+          disabled={disabled}
+        />
+        <input
+          type="text"
+          className="action-input"
+          value={action.key}
+          placeholder="Enter"
+          onChange={(e) => update(action.id, { key: e.target.value })}
+          disabled={disabled}
+        />
+      </>
+    );
+  }
+  if (action.type === "wait") {
+    return (
+      <input
+        type="number"
+        min={0}
+        max={10000}
+        className="action-input action-input-num"
+        value={action.ms}
+        onChange={(e) => update(action.id, { ms: Number(e.target.value) || 0 })}
+        disabled={disabled}
+      />
+    );
+  }
+  if (action.type === "waitForUrl") {
+    return (
+      <input
+        type="text"
+        className="action-input"
+        value={action.url}
+        placeholder="**/dashboard"
+        onChange={(e) => update(action.id, { url: e.target.value })}
+        disabled={disabled}
+      />
+    );
+  }
+  if (action.type === "scroll") {
+    return (
+      <>
+        <input
+          type="text"
+          className="action-input"
+          value={action.selector ?? ""}
+          placeholder="(selector — optional)"
+          onChange={(e) => update(action.id, { selector: e.target.value })}
+          disabled={disabled}
+        />
+        <input
+          type="number"
+          className="action-input action-input-num"
+          value={action.y ?? 0}
+          placeholder="y"
+          onChange={(e) => update(action.id, { y: Number(e.target.value) || 0 })}
+          disabled={disabled}
+        />
+      </>
+    );
+  }
+  return null;
 }
 
 function joinUrl(base: string, route: string): string {

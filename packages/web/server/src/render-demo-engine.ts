@@ -62,6 +62,22 @@ export type RenderDemoAuth =
       sessionStorage?: Record<string, string>;
     };
 
+/**
+ * Per-screen action — runs inside the captured page after `goto()`,
+ * before the screenshot. A small, safe subset of Playwright that the
+ * engine knows how to drive.
+ */
+export type ScreenAction =
+  | { type: "click"; selector: string; timeoutMs?: number }
+  | { type: "fill"; selector: string; value: string; timeoutMs?: number }
+  | { type: "press"; selector: string; key: string; timeoutMs?: number }
+  | { type: "wait"; ms: number }
+  | { type: "waitForSelector"; selector: string; timeoutMs?: number }
+  | { type: "waitForUrl"; url: string; timeoutMs?: number }
+  | { type: "scroll"; selector?: string; y?: number };
+
+const MAX_ACTIONS = 20;
+
 export interface RenderDemoRequest {
   url: string;
   caption: string;
@@ -70,6 +86,8 @@ export interface RenderDemoRequest {
   theme?: "dark" | "light";
   /** Target-app auth — runs as setup() before the capture goto. */
   auth?: RenderDemoAuth;
+  /** Optional script — click/fill/wait between goto and screenshot. */
+  actions?: ReadonlyArray<ScreenAction>;
 }
 
 export interface RenderDemoSuccess {
@@ -146,6 +164,7 @@ async function runOne(
       isMobile: template.isMobile,
       theme,
       ...(req.auth ? { auth: req.auth } : {}),
+      ...(req.actions ? { actions: req.actions } : {}),
       waitMs: 1200,
     });
     return await composeWithBrowser(browser, {
@@ -176,6 +195,8 @@ export interface CaptureScreenRequest {
   auth?: RenderDemoAuth;
   /** Extra ms to wait after `networkidle` (chart animations, etc.). */
   waitMs?: number;
+  /** Optional script: run these in order after goto, before screenshot. */
+  actions?: ReadonlyArray<ScreenAction>;
 }
 
 export interface ComposeScreenRequest {
@@ -211,6 +232,10 @@ export async function captureScreen(req: CaptureScreenRequest): Promise<EngineRe
   if (req.auth) {
     const authError = validateAuth(req.auth);
     if (authError) return authError;
+  }
+  if (req.actions !== undefined) {
+    const actionsError = validateActions(req.actions);
+    if (actionsError) return actionsError;
   }
   const urlCheck = await validateUrl(req.url);
   if (!urlCheck.ok) return urlCheck;
@@ -325,6 +350,7 @@ interface CaptureWithBrowserArgs {
   theme?: "dark" | "light";
   auth?: RenderDemoAuth;
   waitMs?: number;
+  actions?: ReadonlyArray<ScreenAction>;
 }
 
 async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs): Promise<Buffer> {
@@ -346,6 +372,12 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
         await runTargetAuth(page, args.url, args.auth);
       }
       await page.goto(args.url, { waitUntil: "networkidle", timeout: 25_000 });
+      // Run user-supplied actions (click / fill / wait / etc.) between
+      // navigation and screenshot so the Crawler can drive into modals,
+      // search results, multi-step flows.
+      if (args.actions && args.actions.length > 0) {
+        await runActions(page, args.actions);
+      }
       await page.waitForTimeout(args.waitMs ?? 1200);
       await page.screenshot({ path: rawPath, fullPage: false });
     } finally {
@@ -355,6 +387,126 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
   } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+async function runActions(page: Page, actions: ReadonlyArray<ScreenAction>): Promise<void> {
+  for (const [i, action] of actions.entries()) {
+    try {
+      await runOneAction(page, action);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`actions[${i}] (${action.type}) failed: ${msg}`, { cause: err });
+    }
+  }
+}
+
+async function runOneAction(page: Page, action: ScreenAction): Promise<void> {
+  if (action.type === "click") {
+    await page.click(action.selector, { timeout: action.timeoutMs ?? 10_000 });
+    return;
+  }
+  if (action.type === "fill") {
+    await page.fill(action.selector, action.value, { timeout: action.timeoutMs ?? 10_000 });
+    return;
+  }
+  if (action.type === "press") {
+    await page.press(action.selector, action.key, { timeout: action.timeoutMs ?? 10_000 });
+    return;
+  }
+  if (action.type === "wait") {
+    await page.waitForTimeout(action.ms);
+    return;
+  }
+  if (action.type === "waitForSelector") {
+    await page.waitForSelector(action.selector, { timeout: action.timeoutMs ?? 10_000 });
+    return;
+  }
+  if (action.type === "waitForUrl") {
+    await page.waitForURL(action.url, { timeout: action.timeoutMs ?? 10_000 });
+    return;
+  }
+  // scroll
+  if (action.selector) {
+    await page.locator(action.selector).scrollIntoViewIfNeeded({ timeout: 10_000 });
+  } else if (typeof action.y === "number") {
+    await page.evaluate(`window.scrollTo(0, ${action.y})`);
+  }
+}
+
+function validateActions(raw: ReadonlyArray<unknown>): RenderDemoFailure | null {
+  if (!Array.isArray(raw)) {
+    return { ok: false, status: 400, error: "`actions` must be an array." };
+  }
+  if (raw.length > MAX_ACTIONS) {
+    return { ok: false, status: 400, error: `Too many actions (max ${MAX_ACTIONS}).` };
+  }
+  for (let i = 0; i < raw.length; i++) {
+    const a: unknown = raw[i];
+    if (!a || typeof a !== "object") {
+      return { ok: false, status: 400, error: `actions[${i}] must be an object.` };
+    }
+    const obj = a as Record<string, unknown>;
+    const t = obj.type;
+    if (typeof t !== "string") {
+      return { ok: false, status: 400, error: `actions[${i}].type is required.` };
+    }
+    if (t === "click" || t === "waitForSelector") {
+      if (typeof obj.selector !== "string" || obj.selector.length === 0) {
+        return { ok: false, status: 400, error: `actions[${i}] (${t}) needs \`selector\`.` };
+      }
+      continue;
+    }
+    if (t === "fill") {
+      if (typeof obj.selector !== "string" || typeof obj.value !== "string") {
+        return {
+          ok: false,
+          status: 400,
+          error: `actions[${i}] (fill) needs \`selector\` and \`value\` strings.`,
+        };
+      }
+      continue;
+    }
+    if (t === "press") {
+      if (typeof obj.selector !== "string" || typeof obj.key !== "string") {
+        return {
+          ok: false,
+          status: 400,
+          error: `actions[${i}] (press) needs \`selector\` and \`key\` strings.`,
+        };
+      }
+      continue;
+    }
+    if (t === "wait") {
+      if (typeof obj.ms !== "number" || obj.ms < 0 || obj.ms > 30_000) {
+        return { ok: false, status: 400, error: `actions[${i}] (wait).ms must be 0..30000.` };
+      }
+      continue;
+    }
+    if (t === "waitForUrl") {
+      if (typeof obj.url !== "string" || obj.url.length === 0) {
+        return { ok: false, status: 400, error: `actions[${i}] (waitForUrl) needs \`url\`.` };
+      }
+      continue;
+    }
+    if (t === "scroll") {
+      const okSelector = typeof obj.selector === "string" || obj.selector === undefined;
+      const okY = typeof obj.y === "number" || obj.y === undefined;
+      if (!okSelector || !okY) {
+        return {
+          ok: false,
+          status: 400,
+          error: `actions[${i}] (scroll) needs \`selector\` (string) or \`y\` (number).`,
+        };
+      }
+      continue;
+    }
+    return {
+      ok: false,
+      status: 400,
+      error: `actions[${i}].type "${t}" not supported. Allowed: click, fill, press, wait, waitForSelector, waitForUrl, scroll.`,
+    };
+  }
+  return null;
 }
 
 interface ComposeWithBrowserArgs {

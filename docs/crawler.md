@@ -56,6 +56,34 @@ its raw appears below the row inline.
 You can edit captions/subtitles freely **before or after** capturing —
 they only matter at render time.
 
+#### Actions before screenshot
+
+Each screen card has an **Actions before screenshot** section that lets
+you drive the page before the screenshot fires. Useful for:
+
+- Clicking into a modal: `click("button[aria-label=Open menu]")`
+- Filling a search input: `fill("input[name=q]", "groceries")` →
+  `press("input[name=q]", "Enter")`
+- Dismissing a tooltip: `click(".tour-close")`
+- Scrolling into a feature: `scroll(".pricing-table")`
+
+Supported action types — these run server-side via Playwright in the
+order you list them, between `goto()` and the screenshot:
+
+| Type              | Fields              | Notes                                                          |
+| ----------------- | ------------------- | -------------------------------------------------------------- |
+| `click`           | `selector`          | Click an element.                                              |
+| `fill`            | `selector`, `value` | Fill an input.                                                 |
+| `press`           | `selector`, `key`   | Send a keypress (`Enter`, `Tab`, `Escape`, etc.).              |
+| `wait`            | `ms`                | Pause (max 30s).                                               |
+| `waitForSelector` | `selector`          | Wait for an element to appear.                                 |
+| `waitForUrl`      | `url`               | Wait for navigation to match a URL pattern.                    |
+| `scroll`          | `selector` or `y`   | Scroll an element into view, or scroll the page to `y` pixels. |
+
+Capped at 20 actions per screen. Each action has a 10-second default
+timeout (overridable via `timeoutMs` on supported actions). The whole
+capture (auth + actions + screenshot) still has the 60s deadline.
+
 ### 3. Render
 
 Pick the templates you want to render through. A single capture goes

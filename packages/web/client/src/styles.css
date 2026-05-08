@@ -535,6 +535,261 @@ label {
   margin: 0.35rem 0 0;
 }
 
+/* Crawler */
+
+.crawler-step {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.crawler-step h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+}
+
+.screen-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.screen-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.screen-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.screen-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.screen-name-input {
+  background: transparent;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.screen-name-input:hover {
+  border-color: var(--border);
+}
+
+.screen-name-input:focus {
+  background: var(--bg-elevated);
+}
+
+.screen-card .status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.screen-card .status-running {
+  background: rgba(52, 211, 153, 0.18);
+  color: var(--accent);
+}
+
+.screen-card .status-done {
+  background: rgba(52, 211, 153, 0.32);
+  color: var(--accent);
+}
+
+.screen-card .status-error {
+  background: rgba(252, 165, 165, 0.18);
+  color: #fda4af;
+}
+
+.screen-card-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.screen-card-actions button {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.screen-card-actions .remove {
+  padding: 0.35rem 0.55rem;
+}
+
+.screen-card-grid {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+
+.screen-card-grid .field {
+  display: contents;
+  margin: 0;
+}
+
+.screen-card-grid .field label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.screen-card-grid .field input {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 700px) {
+  .screen-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .screen-card-grid .field label {
+    text-align: left;
+  }
+}
+
+.screen-card-error {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: rgba(252, 165, 165, 0.08);
+  border: 1px solid rgba(252, 165, 165, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: #fda4af;
+}
+
+.screen-card-preview {
+  margin-top: 0.75rem;
+  max-width: 300px;
+}
+
+.screen-card-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #000;
+}
+
+/* Per-screen actions editor */
+
+.actions-editor {
+  margin-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.5rem;
+}
+
+.actions-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+}
+
+.actions-toggle:hover {
+  color: var(--text);
+  background: transparent;
+}
+
+.actions-body {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.action-index {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  min-width: 1.5em;
+}
+
+.action-type {
+  font-family: "SF Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 0.75rem;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.action-input {
+  flex: 1 1 0;
+  min-width: 100px;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.action-input-num {
+  flex: 0 0 90px;
+}
+
+.action-row-tools {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.action-row-tools button {
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.action-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding-top: 0.25rem;
+}
+
+.action-add-btn {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+@media (max-width: 700px) {
+  .action-row {
+    flex-wrap: wrap;
+  }
+  .action-input {
+    flex-basis: 100%;
+  }
+}
+
 /* Footer */
 
 .footer {

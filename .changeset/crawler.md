@@ -22,3 +22,9 @@ All three live behind the same `SHOTCRAFT_LIVE_DEMO=1` flag. The
 `auth` field still requires `SHOTCRAFT_LIVE_DEMO_TOKEN` to be set.
 Captures and composites stay in the browser as Blob URLs — no
 server-side session, no cleanup cron.
+
+Each screen card supports **per-screen actions** that run server-side
+between `goto()` and the screenshot — `click`, `fill`, `press`,
+`wait`, `waitForSelector`, `waitForUrl`, and `scroll`. Cap of 20
+actions per screen, 30s max wait. Lets you drive into modals, fill
+search inputs, dismiss tooltips, etc. before the camera fires.
