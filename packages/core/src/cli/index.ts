@@ -13,13 +13,13 @@
  *   shotcraft --version
  *   shotcraft --help
  *
- * NOTE: this is the v0 scaffold. Each subcommand currently exits with a
- * "not implemented" message. They land incrementally in Phase 2-7 of the
- * v1 build per .claude/plans/shotcraft-v1.md.
+ * Phase 2 implements: init, capture, doctor (and the no-arg run path delegates
+ * to capture for now). Phases 3-7 fill in render, list, dev, web.
  */
 
-const args = process.argv.slice(2);
-const subcommand = args[0];
+import { runInit } from "./commands/init.js";
+import { runCaptureCommand } from "./commands/capture.js";
+import { runDoctor } from "./commands/doctor.js";
 
 const VERSION = "0.0.0";
 
@@ -40,6 +40,9 @@ SUBCOMMANDS
   doctor                  Sanity-check config + target reachability
 
 OPTIONS
+  -c, --config <path>     Path to a shotcraft.config.{ts,js} (default: search cwd)
+  -f, --force             Allow init to overwrite an existing config
+  --headed                Run capture with a visible browser (debugging)
   -h, --help              Show this help
   -v, --version           Show version
 
@@ -47,53 +50,132 @@ DOCS
   https://shotcraft.dev
 `.trim();
 
+interface ParsedArgs {
+  subcommand: string | undefined;
+  flags: {
+    help: boolean;
+    version: boolean;
+    force: boolean;
+    headed: boolean;
+    configFile: string | undefined;
+  };
+  positional: string[];
+}
+
+function parseArgs(argv: ReadonlyArray<string>): ParsedArgs {
+  const flags: ParsedArgs["flags"] = {
+    help: false,
+    version: false,
+    force: false,
+    headed: false,
+    configFile: undefined,
+  };
+  const positional: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") flags.help = true;
+    else if (a === "--version" || a === "-v") flags.version = true;
+    else if (a === "--force" || a === "-f") flags.force = true;
+    else if (a === "--headed") flags.headed = true;
+    else if (a === "--config" || a === "-c") {
+      const next = argv[i + 1];
+      if (!next) {
+        process.stderr.write(`shotcraft: --config requires a path\n`);
+        process.exit(1);
+      }
+      flags.configFile = next;
+      i++;
+    } else if (typeof a === "string" && a.startsWith("--config=")) {
+      flags.configFile = a.slice("--config=".length);
+    } else if (typeof a === "string") {
+      positional.push(a);
+    }
+  }
+  return {
+    subcommand: positional[0],
+    positional: positional.slice(1),
+    flags,
+  };
+}
+
 function notImplemented(name: string): never {
-  console.error(
-    `\nshotcraft ${name}: not implemented yet — v0 scaffold.\n\n` +
-      `This subcommand lands in the v1 build. See:\n` +
-      `  https://github.com/miopea/shotcraft/blob/main/.claude/plans/shotcraft-v1.md\n`,
+  process.stderr.write(
+    `\nshotcraft ${name}: not implemented yet — lands in a later phase.\n` +
+      `See https://github.com/miopea/shotcraft/blob/main/.claude/plans/shotcraft-v1.md\n`,
   );
   process.exit(2);
 }
 
-if (args.includes("--version") || args.includes("-v")) {
-  console.log(VERSION);
-  process.exit(0);
+async function dispatch(args: ParsedArgs): Promise<void> {
+  if (args.flags.version) {
+    process.stdout.write(`${VERSION}\n`);
+    return;
+  }
+  if (args.flags.help || args.subcommand === "help") {
+    process.stdout.write(`${HELP}\n`);
+    return;
+  }
+
+  switch (args.subcommand) {
+    case undefined:
+    case "run":
+      await runCaptureCommand({
+        ...(args.flags.configFile !== undefined ? { configFile: args.flags.configFile } : {}),
+        headed: args.flags.headed,
+      });
+      process.stdout.write("\nshotcraft: capture phase complete. (render lands in Phase 3.)\n");
+      return;
+    case "init": {
+      const result = await runInit({ force: args.flags.force });
+      if (result.written) {
+        process.stdout.write(
+          `Wrote ${result.path}\nNext: edit it and run \`shotcraft capture\`.\n`,
+        );
+      } else {
+        process.stderr.write(
+          `Refusing to overwrite ${result.path}. Re-run with --force to replace it.\n`,
+        );
+        process.exit(1);
+      }
+      return;
+    }
+    case "capture":
+      await runCaptureCommand({
+        ...(args.flags.configFile !== undefined ? { configFile: args.flags.configFile } : {}),
+        headed: args.flags.headed,
+      });
+      return;
+    case "doctor": {
+      const report = await runDoctor(
+        args.flags.configFile !== undefined ? { configFile: args.flags.configFile } : {},
+      );
+      if (report.warnings.length > 0) {
+        for (const w of report.warnings) process.stdout.write(`! ${w}\n`);
+      }
+      if (!report.ok) {
+        process.stderr.write(`\nshotcraft doctor: ${report.problems.length} problem(s):\n`);
+        for (const p of report.problems) process.stderr.write(`  - ${p}\n`);
+        process.exit(1);
+      }
+      process.stdout.write("\nshotcraft doctor: all checks passed.\n");
+      return;
+    }
+    case "render":
+    case "dev":
+    case "web":
+    case "list":
+      notImplemented(args.subcommand);
+    // eslint-disable-next-line no-fallthrough
+    default:
+      process.stderr.write(`\nshotcraft: unknown subcommand "${args.subcommand}"\n\n`);
+      process.stderr.write(`${HELP}\n`);
+      process.exit(1);
+  }
 }
 
-if (args.includes("--help") || args.includes("-h") || subcommand === "help") {
-  console.log(HELP);
-  process.exit(0);
-}
-
-switch (subcommand) {
-  case undefined:
-  case "run":
-    notImplemented("run");
-    break;
-  case "init":
-    notImplemented("init");
-    break;
-  case "capture":
-    notImplemented("capture");
-    break;
-  case "render":
-    notImplemented("render");
-    break;
-  case "dev":
-    notImplemented("dev");
-    break;
-  case "web":
-    notImplemented("web");
-    break;
-  case "list":
-    notImplemented("list");
-    break;
-  case "doctor":
-    notImplemented("doctor");
-    break;
-  default:
-    console.error(`\nshotcraft: unknown subcommand "${subcommand}"\n`);
-    console.error(HELP);
-    process.exit(1);
-}
+const args = parseArgs(process.argv.slice(2));
+dispatch(args).catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`\nshotcraft: ${message}\n`);
+  process.exit(1);
+});

@@ -37,7 +37,13 @@ examples/*/screenshots/out/
 docs/.astro/
 docs/dist/
 
-# Changesets — keep .changeset/config.json + markdown changesets, ignore generated
-.changeset/*.md
-!.changeset/README.md
-!.changeset/config.json
+# Changesets — `.changeset/*.md` files ARE the source of truth (they describe
+# pending version bumps) and must be committed. Nothing to ignore here.
+
+# Claude Code / MCP — operator-machine state (commands, skills, MCP servers,
+# local settings). `.claude/plans/` is the only subdir we track, since plans
+# describe the project itself.
+.claude/commands/
+.claude/skills/
+.claude/settings.local.json
+.mcp.json

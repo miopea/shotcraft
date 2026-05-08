@@ -21,7 +21,7 @@
     "build:server": "tsc -p server/tsconfig.json",
     "start": "node server/dist/index.js",
     "typecheck": "tsc -p server/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "express": "^5.0.0"

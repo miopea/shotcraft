@@ -1,5 +1,7 @@
 import type { Page } from "playwright";
 
+export type Theme = "dark" | "light";
+
 /**
  * Setup hook — called once after the headless browser launches and before any
  * screen is captured. The user has full Playwright `Page` access; this is the
@@ -11,6 +13,17 @@ import type { Page } from "playwright";
  * dismiss onboarding, click a "Start tour" button — goes here.
  */
 export type SetupFn = (page: Page) => Promise<void>;
+
+/**
+ * Optional imperative theme hook. If your app respects the CSS
+ * `prefers-color-scheme` media query (most modern frameworks do), you can
+ * leave this unset — Shotcraft already configures the Playwright context
+ * with the right `colorScheme` per theme.
+ *
+ * Provide this only when your app needs a programmatic toggle: setting a
+ * `localStorage` key, calling a global, clicking a UI affordance.
+ */
+export type ApplyThemeFn = (page: Page, theme: Theme) => Promise<void>;
 
 export interface ScreenDef {
   /** Path on the target app to navigate to, e.g. "/dashboard". */
@@ -56,6 +69,22 @@ export type TemplateRef =
       options?: Record<string, unknown>;
     };
 
+export interface ShotcraftDefaults {
+  /**
+   * Logical viewport (CSS pixels) used during capture when a template's
+   * viewport metadata isn't available. Default: `{ width: 1280, height: 800,
+   * dpr: 2 }` (desktop). For mobile-first captures override with iPhone-ish
+   * dimensions.
+   */
+  viewport?: { width: number; height: number; dpr: number };
+  /** Themes to capture for. Default: `["dark"]`. */
+  themes?: ReadonlyArray<Theme>;
+  /** Advertise mobile UA / touch / `isMobile`. Default: `false`. */
+  isMobile?: boolean;
+  /** Optional UA override. */
+  userAgent?: string;
+}
+
 export interface ShotcraftConfig {
   /**
    * URL of the running app to capture. Usually a dev server (`http://localhost:5173`)
@@ -68,10 +97,19 @@ export interface ShotcraftConfig {
    * screen capture.
    */
   setup?: SetupFn;
+  /**
+   * Optional imperative theme hook — see {@link ApplyThemeFn}. Most apps that
+   * respect `prefers-color-scheme` won't need this.
+   */
+  applyTheme?: ApplyThemeFn;
   /** Screens to capture. */
   screens: ReadonlyArray<ScreenDef>;
-  /** Templates to render the captures through. */
-  templates: ReadonlyArray<TemplateRef>;
+  /**
+   * Templates to render the captures through. Optional during the Phase 2
+   * timeframe — capture-only runs work without any installed templates and
+   * fall back to {@link ShotcraftDefaults}.
+   */
+  templates?: ReadonlyArray<TemplateRef>;
   /**
    * Output directory root. Each template writes to `${outputDir}/${template.id}/`.
    * Default: `./screenshots`.
@@ -86,4 +124,9 @@ export interface ShotcraftConfig {
   locale?: string;
   /** Override the IANA timezone Playwright reports. Default: `America/New_York`. */
   timezoneId?: string;
+  /**
+   * Defaults applied when no template metadata is available (e.g. capture-only
+   * runs before Phase 4 ships first-party templates).
+   */
+  defaults?: ShotcraftDefaults;
 }

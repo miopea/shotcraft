@@ -19,8 +19,7 @@ export function App() {
   return (
     <main
       style={{
-        fontFamily:
-          "-apple-system, 'Segoe UI', Inter, system-ui, sans-serif",
+        fontFamily: "-apple-system, 'Segoe UI', Inter, system-ui, sans-serif",
         padding: "4rem 2rem",
         maxWidth: 720,
         margin: "0 auto",
@@ -29,12 +28,12 @@ export function App() {
     >
       <h1>Shotcraft</h1>
       <p>
-        Capture your live app and ship App Store-ready screenshots, README hero
-        images, and social cards in one command.
+        Capture your live app and ship App Store-ready screenshots, README hero images, and social
+        cards in one command.
       </p>
       <p>
-        🚧 <strong>v0 scaffold.</strong> Templates gallery, config builder,
-        docs, and live demo land in Phase 8 of the v1 plan.
+        🚧 <strong>v0 scaffold.</strong> Templates gallery, config builder, docs, and live demo land
+        in Phase 8 of the v1 plan.
       </p>
       {health ? (
         <pre
@@ -45,10 +44,12 @@ export function App() {
             overflowX: "auto",
           }}
         >
-{JSON.stringify(health, null, 2)}
+          {JSON.stringify(health, null, 2)}
         </pre>
       ) : (
-        <p style={{ color: "#888" }}>(server unreachable — start it with <code>pnpm --filter @shotcraft/web dev</code>)</p>
+        <p style={{ color: "#888" }}>
+          (server unreachable — start it with <code>pnpm --filter @shotcraft/web dev</code>)
+        </p>
       )}
     </main>
   );

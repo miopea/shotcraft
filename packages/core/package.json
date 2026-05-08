@@ -34,7 +34,10 @@
   "bin": {
     "shotcraft": "./dist/cli/index.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -43,6 +46,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
+    "jiti": "^2.4.0",
     "playwright": "^1.49.0"
   },
   "devDependencies": {

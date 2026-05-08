@@ -19,6 +19,8 @@
  * The toggle is `SHOTCRAFT_LIVE_DEMO=1`. Unset = production mode.
  */
 
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { templatesRouter } from "./routes/templates.js";
 import { renderDemoRouter } from "./routes/render-demo.js";
@@ -43,9 +45,6 @@ app.use("/api/render-demo", renderDemoRouter);
 // In production, serve the Vite-built client. In dev, the Vite dev server
 // runs separately on its own port and proxies /api to here.
 if (process.env.NODE_ENV === "production") {
-  // Lazy import to avoid pulling in path/file resolution in dev mode.
-  const { join } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
   const here = fileURLToPath(new URL(".", import.meta.url));
   const clientDist = join(here, "../client");
   app.use(express.static(clientDist));

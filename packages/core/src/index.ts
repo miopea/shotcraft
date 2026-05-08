@@ -19,12 +19,21 @@
  */
 
 export { defineConfig } from "./config/defineConfig.js";
+export { loadConfig, findConfig } from "./config/load.js";
+export type { LoadConfigOptions, LoadedConfig } from "./config/load.js";
 export type {
   ShotcraftConfig,
+  ShotcraftDefaults,
   ScreenDef,
   TemplateRef,
   SetupFn,
+  ApplyThemeFn,
+  Theme,
 } from "./config/types.js";
+export { runCapture } from "./capture/runner.js";
+export type { CaptureRunOptions, CaptureResult } from "./capture/runner.js";
+export { deriveCaptureSpecs, resolveDefaults, captureFilename } from "./capture/spec.js";
+export type { CaptureSpec, ResolvedViewport } from "./capture/spec.js";
 export { run } from "./run.js";
 export type { RunOptions } from "./run.js";
 export type { ShotcraftTemplate } from "./template/types.js";

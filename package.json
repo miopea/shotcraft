@@ -13,15 +13,16 @@
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build",
     "test": "pnpm -r --filter './packages/*' test",
-    "lint": "eslint \"packages/*/src/**/*.ts\" \"packages/*/src/**/*.tsx\"",
-    "format": "prettier --write \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
-    "format:check": "prettier --check \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
+    "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/src/**/*.{ts,tsx}\"",
+    "format": "prettier --write --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
+    "format:check": "prettier --check --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.{md,mdx}\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
     "typecheck": "pnpm -r --filter './packages/*' typecheck",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.7.0",
     "eslint": "^9.10.0",
     "prettier": "^3.3.3",

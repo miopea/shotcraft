@@ -58,49 +58,49 @@ pnpm changeset          # record a version-bump intent for the next release
 
 ## Tech Stack
 
-| Layer | Choice |
-|---|---|
-| Language | TypeScript ^5.6 strict |
-| Package mgr | pnpm 11 (workspaces) |
-| Bundler (core) | tsup → ESM only |
-| Bundler (web client) | Vite 5 |
-| Runtime (web server) | Express 5 + tsx (dev) / tsc (prod) |
-| Tests | Vitest 2 |
-| Lint | ESLint 9 flat config + typescript-eslint |
-| Format | Prettier 3 |
-| Versioning | Changesets |
-| Capture engine | Playwright (Chromium only for v1) |
-| Docs site | Astro Starlight (Phase 6) |
+| Layer                | Choice                                   |
+| -------------------- | ---------------------------------------- |
+| Language             | TypeScript ^5.6 strict                   |
+| Package mgr          | pnpm 11 (workspaces)                     |
+| Bundler (core)       | tsup → ESM only                          |
+| Bundler (web client) | Vite 5                                   |
+| Runtime (web server) | Express 5 + tsx (dev) / tsc (prod)       |
+| Tests                | Vitest 2                                 |
+| Lint                 | ESLint 9 flat config + typescript-eslint |
+| Format               | Prettier 3                               |
+| Versioning           | Changesets                               |
+| Capture engine       | Playwright (Chromium only for v1)        |
+| Docs site            | Astro Starlight (Phase 6)                |
 
 ## v1 Phase Status
 
 Tracked in `.claude/plans/shotcraft-v1.md`. Brief:
 
-| Phase | Status | Description |
-|---|---|---|
-| 1 | ✅ Done | Repo skeleton — pnpm workspaces, tsconfig, eslint, prettier, vitest, changesets, GH workflows, MIT license, README |
-| 2 | ⏳ Next | Port BudgetBug's capture engine into `packages/core/src/capture/`, generalize for arbitrary targets, wire `shotcraft capture` subcommand |
-| 3 | Pending | Render engine + first template (`@shotcraft/template-app-store-iphone`) end-to-end with 3D-perspective device frame |
-| 4 | Pending | Templates 2-6 (app-store-ipad, play-store-phone, play-store-tablet, readme-hero, social-og-card) |
-| 5 | Pending | `examples/budgetbug/shotcraft.config.ts` driving the real BudgetBug capture set end-to-end |
-| 6 | Pending | Astro Starlight docs site (gallery, getting-started, API reference, contributing) |
-| 7 | Pending | npm publish flow + polish (Changesets-driven release, demo GIFs, eat-own-dogfood README hero) |
-| 8 | 🟡 Partial | Hosted companion (`@shotcraft/web`) scaffolded; templates gallery + config builder + live-demo implementation pending |
+| Phase | Status     | Description                                                                                                                              |
+| ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | ✅ Done    | Repo skeleton — pnpm workspaces, tsconfig, eslint, prettier, vitest, changesets, GH workflows, MIT license, README                       |
+| 2     | ⏳ Next    | Port BudgetBug's capture engine into `packages/core/src/capture/`, generalize for arbitrary targets, wire `shotcraft capture` subcommand |
+| 3     | Pending    | Render engine + first template (`@shotcraft/template-app-store-iphone`) end-to-end with 3D-perspective device frame                      |
+| 4     | Pending    | Templates 2-6 (app-store-ipad, play-store-phone, play-store-tablet, readme-hero, social-og-card)                                         |
+| 5     | Pending    | `examples/budgetbug/shotcraft.config.ts` driving the real BudgetBug capture set end-to-end                                               |
+| 6     | Pending    | Astro Starlight docs site (gallery, getting-started, API reference, contributing)                                                        |
+| 7     | Pending    | npm publish flow + polish (Changesets-driven release, demo GIFs, eat-own-dogfood README hero)                                            |
+| 8     | 🟡 Partial | Hosted companion (`@shotcraft/web`) scaffolded; templates gallery + config builder + live-demo implementation pending                    |
 
 ## CLI Subcommand Surface
 
 All implemented as `shotcraft <subcommand>` from `packages/core/src/cli/index.ts`. Currently every subcommand is a "not implemented" stub pointing at the plan; they fill in across phases 2-8.
 
-| Command | Phase landed | Behaviour |
-|---|---|---|
-| `shotcraft` (no args) | 3 | Reads config, runs capture + render end-to-end |
-| `shotcraft init` | 2 | Scaffolds `shotcraft.config.ts` with comments + sample setup function |
-| `shotcraft capture` | 2 | Runs only the capture phase |
-| `shotcraft render [id]` | 3 | Runs only render; optionally for one template |
-| `shotcraft dev` | (TBD) | Hot-reload preview for template authors |
-| `shotcraft web` | 8 | Launches `@shotcraft/web` locally with `SHOTCRAFT_LIVE_DEMO=1` |
-| `shotcraft list` | 4 | Prints discovered templates from package.json deps |
-| `shotcraft doctor` | 2 | Sanity-checks config (target reachable, login works, templates installed) |
+| Command                 | Phase landed | Behaviour                                                                 |
+| ----------------------- | ------------ | ------------------------------------------------------------------------- |
+| `shotcraft` (no args)   | 3            | Reads config, runs capture + render end-to-end                            |
+| `shotcraft init`        | 2            | Scaffolds `shotcraft.config.ts` with comments + sample setup function     |
+| `shotcraft capture`     | 2            | Runs only the capture phase                                               |
+| `shotcraft render [id]` | 3            | Runs only render; optionally for one template                             |
+| `shotcraft dev`         | (TBD)        | Hot-reload preview for template authors                                   |
+| `shotcraft web`         | 8            | Launches `@shotcraft/web` locally with `SHOTCRAFT_LIVE_DEMO=1`            |
+| `shotcraft list`        | 4            | Prints discovered templates from package.json deps                        |
+| `shotcraft doctor`      | 2            | Sanity-checks config (target reachable, login works, templates installed) |
 
 ## Template Package Contract
 
@@ -110,9 +110,9 @@ Every Shotcraft template package — first-party (`@shotcraft/template-*`) or co
 import type { ShotcraftTemplate } from "shotcraft";
 
 const template: ShotcraftTemplate = {
-  id: "app-store-iphone",                        // unique, stable
+  id: "app-store-iphone", // unique, stable
   viewport: { width: 428, height: 926, dpr: 3 }, // CSS px the SPA sees during capture
-  output: { width: 1284, height: 2778 },         // physical px of final composite
+  output: { width: 1284, height: 2778 }, // physical px of final composite
   themes: ["dark", "light"],
   wrapperHtmlPath: new URL("./wrapper.html", import.meta.url).pathname,
   isMobile: true,
