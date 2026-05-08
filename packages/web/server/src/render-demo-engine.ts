@@ -1109,21 +1109,40 @@ async function discoverWithBrowser(
   });
   try {
     const page = await ctx.newPage();
+
+    // After auth, the user typically lands on /dashboard or similar.
+    // We use that as the discover start instead of the original target
+    // URL — re-navigating to the public marketing root after login
+    // throws away the authenticated UI we actually want to discover.
+    let discoverStart = args.url;
     if (args.auth) {
       await runTargetAuth(page, args.url, args.auth);
+      const postAuth = page.url();
+      if (postAuth && postAuth !== "about:blank") {
+        try {
+          const u = new URL(postAuth);
+          if (u.origin === origin && u.pathname !== "/") {
+            discoverStart = postAuth;
+          }
+        } catch {
+          // unparseable post-auth url — fall back to the user's target
+        }
+      }
     }
 
-    // Always navigate to the start URL once so subsequent fetches in
-    // page.evaluate() share the post-auth cookies / origin.
-    try {
-      await page.goto(start.toString(), {
-        waitUntil: "domcontentloaded",
-        timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
-      });
-    } catch {
-      // Even if the initial nav fails we let the techniques try; sitemap
-      // + common-routes fetches still work as long as the origin is
-      // reachable.
+    // Make sure the page is on discoverStart for downstream fetches
+    // (page.evaluate fetches resolve relative to the current URL).
+    if (page.url() !== discoverStart) {
+      try {
+        await page.goto(discoverStart, {
+          waitUntil: "domcontentloaded",
+          timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
+        });
+      } catch {
+        // Even if the initial nav fails we let the techniques try; sitemap
+        // + common-routes fetches still work as long as the origin is
+        // reachable.
+      }
     }
 
     // Each technique returns DiscoveredRoute[]; `merged` dedupes by
@@ -1134,6 +1153,10 @@ async function discoverWithBrowser(
       const key = r.path.replace(/\/$/, "") || "/";
       if (!merged.has(key)) merged.set(key, r);
     };
+
+    // Techniques run against discoverStart, not args.url — see the
+    // post-auth redirect comment above.
+    const techArgs: RunDiscoverArgs = { ...args, url: discoverStart };
 
     if (args.techniques.sitemap) {
       const found = await discoverViaSitemap(page, origin).catch(() => [] as DiscoveredRoute[]);
@@ -1155,7 +1178,9 @@ async function discoverWithBrowser(
     }
 
     if (args.techniques.linkCrawl && merged.size < args.maxPages) {
-      const found = await discoverViaLinks(page, origin, args).catch(() => [] as DiscoveredRoute[]);
+      const found = await discoverViaLinks(page, origin, techArgs).catch(
+        () => [] as DiscoveredRoute[],
+      );
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1163,7 +1188,7 @@ async function discoverWithBrowser(
     }
 
     if (args.techniques.navClick && merged.size < args.maxPages) {
-      const found = await discoverViaNavClick(page, origin, args.url).catch(
+      const found = await discoverViaNavClick(page, origin, discoverStart).catch(
         () => [] as DiscoveredRoute[],
       );
       for (const r of found) {
