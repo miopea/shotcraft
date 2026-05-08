@@ -18,9 +18,10 @@ every screen at every viewport you need, and composites the raws
 through device-frame templates into shippable images for the App Store,
 Play Store, your README, and social cards.
 
-The hero above? Rendered by Shotcraft itself, against the
-[Shotcraft docs site](https://shotcraft.dev). Eat-our-own-dogfood
-proof.
+The hero above? Rendered by Shotcraft itself, against the Shotcraft
+docs site. Eat-our-own-dogfood proof — see
+[`examples/shotcraft-docs/`](./examples/shotcraft-docs) for the config
+that produced it.
 
 ## Quickstart
 
@@ -36,12 +37,12 @@ pnpm shotcraft            # capture + render end-to-end
 PNGs land in `screenshots/{template-id}/{name}-{theme}.png`, ready to
 upload to App Store Connect, drop into your README, or post on Twitter.
 
-→ [Full getting-started walk-through](https://shotcraft.dev/getting-started/)
+→ [Full getting-started walk-through](./docs/getting-started.md)
 
 **Try the gallery + config builder today** without installing anything —
 the hosted companion is live at
 [shotcraft-web.azurewebsites.net](https://shotcraft-web.azurewebsites.net)
-(swaps to `shotcraft.dev` once the apex domain is wired up).
+(custom domain pending).
 
 ## What sets it apart
 
@@ -73,7 +74,7 @@ Six templates ship in v0.1, covering the full OSS-developer lifecycle:
 | `@shotcraft/template-readme-hero`       | 1280 × 640  | GitHub README hero (`<picture>`-ready)      |
 | `@shotcraft/template-social-og-card`    | 1200 × 630  | Open Graph / Twitter card                   |
 
-Visual previews: [shotcraft.dev/templates](https://shotcraft.dev/templates/).
+Visual previews: [`docs/templates.md`](./docs/templates.md).
 
 ## Example: drive your app, get every screenshot
 
@@ -121,15 +122,19 @@ against the BudgetBug app.
 
 ## Documentation
 
-The full docs site is at **[shotcraft.dev](https://shotcraft.dev)**:
+Plain markdown under [`docs/`](./docs) — GitHub renders it natively:
 
-- [Getting started](https://shotcraft.dev/getting-started/)
-- [Config reference](https://shotcraft.dev/config/) — every field on `defineConfig`
-- [CLI reference](https://shotcraft.dev/cli/) — every subcommand and flag
-- [Templates gallery](https://shotcraft.dev/templates/) — visual previews
-- [Build your own template](https://shotcraft.dev/contributing/templates/)
+- [Getting started](./docs/getting-started.md) — install, scaffold, run
+- [Config reference](./docs/config.md) — every field on `defineConfig`,
+  including the `apiLogin` / `formLogin` / `injectSession` / `chain`
+  auth helpers
+- [CLI reference](./docs/cli.md) — every subcommand and flag
+- [Templates gallery](./docs/templates.md) — visual previews
+- [Build your own template](./docs/contributing-templates.md)
 
-Source for the docs site lives at [`docs/`](./docs).
+Need an interactive sandbox? The hosted companion ships a templates
+gallery and a config builder at
+[shotcraft-web.azurewebsites.net](https://shotcraft-web.azurewebsites.net).
 
 ## Repo layout
 
@@ -147,7 +152,7 @@ shotcraft/
 ├── examples/
 │   ├── budgetbug/                     # canonical real-world demo
 │   └── shotcraft-docs/                # eat-our-own-dogfood — produced this README's hero
-├── docs/                              # Astro Starlight docs (shotcraft.dev)
+├── docs/                              # plain markdown docs (rendered on GitHub)
 └── .changeset/                        # Changesets versioning
 ```
 
@@ -158,7 +163,7 @@ pnpm install                # workspace install
 pnpm typecheck              # all packages
 pnpm lint                   # ESLint, zero warnings
 pnpm test                   # Vitest, all packages (includes Playwright snapshots)
-pnpm build                  # build core + every template + docs
+pnpm build                  # build core + every template + the web companion
 pnpm changeset              # record a version-bump intent
 ```
 
@@ -166,10 +171,9 @@ pnpm changeset              # record a version-bump intent
 
 Templates are the place where Shotcraft most directly benefits from
 contributions. The package contract is small — see
-[Build your own template](https://shotcraft.dev/contributing/templates/)
-for the walkthrough. Community templates publish under
-`shotcraft-template-*`; they auto-discover on install via
-`shotcraft doctor`.
+[Build your own template](./docs/contributing-templates.md) for the
+walkthrough. Community templates publish under `shotcraft-template-*`;
+they auto-discover on install via `shotcraft doctor`.
 
 For bug reports and feature requests, please open an issue on GitHub.
 PRs welcome — keep them focused, include a test, and add a
@@ -184,13 +188,12 @@ landed:
 - Six first-party template packages, each with sample composites
 - BudgetBug example + eat-our-own-dogfood example (the README hero
   above)
-- Astro Starlight docs site (live at the BFG-managed mirror today;
-  swaps to `shotcraft.dev` when the apex is bought)
+- Plain-markdown docs in [`docs/`](./docs) — rendered on GitHub
 - Hosted companion (`@shotcraft/web`) — templates gallery + config
   builder + `/api/templates`, deployed to Azure App Service
 - npm publish plumbing — Changesets, GitHub Actions, provenance —
-  awaiting operator-side prereqs (`@shotcraft` scope, GitHub repo,
-  `NPM_TOKEN`)
+  awaiting operator-side prereqs (`@shotcraft` scope, `NPM_TOKEN`,
+  `shotcraft.dev` domain)
 
 See [the v1 plan](./.claude/plans/shotcraft-v1.md) for the design
 decisions and [`PUBLISHING.md`](./PUBLISHING.md) for the remaining

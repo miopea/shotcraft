@@ -23,7 +23,7 @@ renderDemoRouter.post("/", (_req, res) => {
     res.status(403).json({
       error:
         "live demo is disabled in this deployment. Run `pnpm shotcraft web` locally to enable it.",
-      docsUrl: "https://shotcraft.dev/docs/local-demo",
+      docsUrl: "https://github.com/miopea/shotcraft#try-the-gallery--config-builder-today",
     });
     return;
   }

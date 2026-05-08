@@ -1,7 +1,6 @@
----
-title: CLI reference
-description: Every Shotcraft subcommand and flag.
----
+# CLI reference
+
+Every Shotcraft subcommand and flag.
 
 The `shotcraft` binary is the primary surface. Every subcommand below
 loads `shotcraft.config.ts` from the current working directory unless
@@ -78,6 +77,18 @@ Exits non-zero on any blocker problem (config missing or invalid,
 target unreachable). Exits zero with warnings if templates aren't
 installed yet.
 
+## `shotcraft web`
+
+```bash
+shotcraft web
+```
+
+Boots the `@shotcraft/web` hosted companion locally with the
+live-demo endpoint enabled. Resolves `@shotcraft/web` from the
+consumer project, falls back to the workspace bundle, and emits a
+clear error pointing at the workspace dev command if neither is
+reachable.
+
 ## Global flags
 
 | Flag                           | Effect                                                               |
@@ -92,4 +103,5 @@ installed yet.
 
 If the CLI is too coarse — for example, you want to run capture against
 a list of URLs that's computed at runtime — every subcommand has a
-programmatic equivalent. See [Config reference → Programmatic API](/config/#programmatic-api).
+programmatic equivalent. See
+[Config reference → Programmatic API](./config.md#programmatic-api).

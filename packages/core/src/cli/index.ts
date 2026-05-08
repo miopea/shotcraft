@@ -52,7 +52,7 @@ OPTIONS
   -v, --version           Show version
 
 DOCS
-  https://shotcraft.dev
+  https://github.com/miopea/shotcraft/tree/main/docs
 `.trim();
 
 interface ParsedArgs {

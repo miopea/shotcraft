@@ -33,17 +33,14 @@ pnpm-debug.log*
 # the repo (the README hero, OG card, etc.) live under `assets/`.
 examples/*/screenshots/
 
-# Docs site build (Astro Starlight default)
-docs/.astro/
-docs/dist/
-# Sample PNGs are copied in by scripts/copy-samples.mjs at build time.
-# Source of truth lives in `packages/template-*/samples/`.
-docs/public/samples/
-
-# @shotcraft/web build artifacts + same sample-copy pattern as docs/.
+# @shotcraft/web build artifacts + sample copies
 packages/web/dist/
 packages/web/server/dist/
 packages/web/client/public/samples/
+
+# Defensive — defunct Astro Starlight cache that regenerates if anyone
+# scaffolds a fresh docs site under this path.
+docs/.astro/
 
 # Changesets — `.changeset/*.md` files ARE the source of truth (they describe
 # pending version bumps) and must be committed. Nothing to ignore here.

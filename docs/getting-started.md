@@ -1,7 +1,7 @@
----
-title: Getting started
-description: Install Shotcraft, point it at your running app, and produce a full marketing screenshot set in five minutes.
----
+# Getting started
+
+Install Shotcraft, point it at your running app, and produce a full
+marketing screenshot set in five minutes.
 
 This walks you through producing your first composites against a running
 dev server. End-to-end you should be looking at App Store-ready PNGs in
@@ -64,34 +64,30 @@ export default defineConfig({
 
 ## Wire up your auth
 
-The `setup` hook runs once after Playwright launches. It's the only auth
-abstraction Shotcraft ships — drop in whatever flow your app uses. A
-common pattern is to hit your auth API directly rather than driving the
-login form (faster, more reliable):
+The `setup` hook runs once after Playwright launches. The fastest way is
+one of the [auth helpers](./config.md#auth-helpers); for the common case
+of a JSON auth endpoint:
 
 ```ts
-setup: async (page) => {
-  await page.goto("http://localhost:5173/login", {
-    waitUntil: "domcontentloaded",
-  });
-  const result = await page.evaluate(async () => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        email: "demo@example.com",
-        password: "demo-password",
-      }),
-    });
-    return { ok: res.ok, status: res.status };
-  });
-  if (!result.ok) throw new Error(`Login failed (${result.status})`);
-};
+import { defineConfig, apiLogin } from "shotcraft";
+
+export default defineConfig({
+  target: "http://localhost:5173",
+  setup: apiLogin({
+    url: "/api/auth/login",
+    body: {
+      email: process.env.DEMO_EMAIL,
+      password: process.env.DEMO_PASSWORD,
+    },
+  }),
+  /* ... */
+});
 ```
 
-OAuth, magic link, biometric, JWT — anything you can drive with Playwright
-works here. There's no built-in primitive for any of them on purpose.
+Helpers cover form-based logins (`formLogin`), pre-existing session
+tokens (`injectSession`), and composition (`chain`). For OAuth, magic
+link, biometric, or anything weirder, write the function yourself —
+full Playwright access covers everything you can script.
 
 ## Validate the config
 
@@ -136,9 +132,10 @@ pipeline.
 
 ## Where to next
 
-- [Config reference](/config/) — every field on `defineConfig`
-- [CLI reference](/cli/) — every subcommand and flag
-- [Template gallery](/templates/) — visual previews of each first-party
-  template against a real app
-- [Build your own template](/contributing/templates/) — the package
+- [Config reference](./config.md) — every field on `defineConfig`,
+  including the auth helpers
+- [CLI reference](./cli.md) — every subcommand and flag
+- [Template gallery](./templates.md) — visual previews of each
+  first-party template
+- [Build your own template](./contributing-templates.md) — the package
   contract and a 60-line starter

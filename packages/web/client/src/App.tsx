@@ -19,7 +19,11 @@ export function App() {
             <NavLink to="/builder" className={({ isActive }) => (isActive ? "active" : "")}>
               Config builder
             </NavLink>
-            <a href="https://shotcraft.dev" target="_blank" rel="noreferrer">
+            <a
+              href="https://github.com/miopea/shotcraft/tree/main/docs"
+              target="_blank"
+              rel="noreferrer"
+            >
               Docs
             </a>
             <a href="https://github.com/miopea/shotcraft" target="_blank" rel="noreferrer">
@@ -38,8 +42,12 @@ export function App() {
       </main>
       <footer className="footer">
         Shotcraft is open source — MIT licensed. ·{" "}
-        <a href="https://shotcraft.dev" target="_blank" rel="noreferrer">
-          shotcraft.dev
+        <a
+          href="https://github.com/miopea/shotcraft/tree/main/docs"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Docs
         </a>{" "}
         ·{" "}
         <a href="https://github.com/miopea/shotcraft" target="_blank" rel="noreferrer">

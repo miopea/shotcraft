@@ -61,9 +61,13 @@ pnpm shotcraft doctor     # sanity-check
 pnpm shotcraft            # capture + render end-to-end`}</code>
         </pre>
         <p>
-          Full docs at{" "}
-          <a href="https://shotcraft.dev" target="_blank" rel="noreferrer">
-            shotcraft.dev
+          Full docs in the{" "}
+          <a
+            href="https://github.com/miopea/shotcraft/tree/main/docs"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub repo
           </a>
           .
         </p>

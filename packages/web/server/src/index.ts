@@ -6,7 +6,7 @@
  *
  * Two run modes:
  *
- *   1. PRODUCTION (deployed to shotcraft.dev):
+ *   1. PRODUCTION (deployed to Azure App Service):
  *      Serves the built React client + APIs for the templates gallery and
  *      config builder. The live-demo endpoint is DISABLED (returns 403 with
  *      "run locally to try it"). No Playwright server-side. No abuse vector.

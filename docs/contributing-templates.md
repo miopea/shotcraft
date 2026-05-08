@@ -1,7 +1,7 @@
----
-title: Build your own template
-description: Publish a Shotcraft template package — the package contract and a 60-line starter.
----
+# Build your own template
+
+Publish a Shotcraft template package — the package contract and a
+60-line starter.
 
 Shotcraft templates are regular npm packages. The contract is small: a
 default export describing where the wrapper lives and what dimensions it
@@ -137,7 +137,7 @@ The Shotcraft first-party templates use a layering trick:
 That way the captured screen shows through cleanly while the bezel
 overlays its edges, hiding any object-fit cropping at the corners.
 
-See [`packages/template-app-store-iphone/wrapper.css`](https://github.com/miopea/shotcraft/blob/main/packages/template-app-store-iphone/wrapper.css)
+See [`packages/template-app-store-iphone/wrapper.css`](../packages/template-app-store-iphone/wrapper.css)
 for a working reference.
 
 ## The exports map
@@ -173,9 +173,9 @@ fails with `No "exports" main defined` for ESM-only packages.
 A snapshot test that drives Playwright against a synthetic raw is the
 easiest way to confirm your template renders at the right dimensions
 and looks polished. See
-[`packages/template-app-store-iphone/test/render.test.ts`](https://github.com/miopea/shotcraft/blob/main/packages/template-app-store-iphone/test/render.test.ts)
+[`packages/template-app-store-iphone/test/render.test.ts`](../packages/template-app-store-iphone/test/render.test.ts)
 for a working pattern. Commit the produced PNGs to `samples/` so the
-docs gallery can show them.
+gallery can show them.
 
 ## Publishing
 

@@ -6,7 +6,7 @@ const DEFAULT_TARGET_PATH = "shotcraft.config.ts";
 
 const TEMPLATE = `import { defineConfig } from "shotcraft";
 // Auth helpers — uncomment whichever fits your login flow. See:
-//   https://shotcraft.dev/config/#auth-helpers
+//   https://github.com/miopea/shotcraft/blob/main/docs/config.md#auth-helpers
 // import { apiLogin, formLogin, injectSession, chain } from "shotcraft";
 
 /**
@@ -20,7 +20,7 @@ const TEMPLATE = `import { defineConfig } from "shotcraft";
  *   shotcraft capture # capture only
  *   shotcraft doctor  # sanity-check this config
  *
- * Docs: https://shotcraft.dev
+ * Docs: https://github.com/miopea/shotcraft/tree/main/docs
  */
 export default defineConfig({
   target: "http://localhost:5173",

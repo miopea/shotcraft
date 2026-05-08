@@ -1,11 +1,11 @@
 packages:
   - "packages/*"
   - "examples/*"
-  - "docs"
 allowBuilds:
   # esbuild needs to compile its native binary at install time. Required for
   # tsup (used by all packages to bundle their TypeScript).
   esbuild: true
-  # sharp downloads its native libvips binaries at install time. Required for
-  # Astro's image optimization in @shotcraft/docs.
-  sharp: true
+  # sharp is pulled in transitively (via vite's build-time deps in
+  # @shotcraft/web). Nothing at runtime uses it — disable the install
+  # script so we don't waste cycles downloading libvips binaries.
+  sharp: false

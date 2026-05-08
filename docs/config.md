@@ -1,7 +1,6 @@
----
-title: Config reference
-description: Every field on `defineConfig`, including the setup and applyTheme hooks.
----
+# Config reference
+
+Every field on `defineConfig`, including the setup and applyTheme hooks.
 
 `shotcraft.config.ts` exports a default `defineConfig({...})` call. Below
 is every field, with types and defaults.
@@ -184,7 +183,7 @@ DEMO_PASSWORD=...
 Load it however your runtime prefers — your existing `dotenv` setup
 works, Node 20.6+'s built-in `--env-file` works, or paste the
 five-line loader from
-[`examples/budgetbug/shotcraft.config.ts`](https://github.com/miopea/shotcraft/blob/main/examples/budgetbug/shotcraft.config.ts).
+[`examples/budgetbug/shotcraft.config.ts`](../examples/budgetbug/shotcraft.config.ts).
 
 If a credential is missing the helper throws a descriptive error mid-
 capture; many configs prefer a top-level guard so `shotcraft doctor`
