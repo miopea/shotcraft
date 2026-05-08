@@ -719,14 +719,20 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
     // origin so users don't have to type the full host twice.
     const formUrl = new URL(auth.url, origin).toString();
     await page.goto(formUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await page.fill(auth.emailField, auth.email, { timeout: 15_000 });
-    await page.fill(auth.passwordField, auth.password, { timeout: 15_000 });
+    await fillFirstMatch(page, "email", auth.emailField, auth.email, EMAIL_FALLBACK_SELECTORS);
+    await fillFirstMatch(
+      page,
+      "password",
+      auth.passwordField,
+      auth.password,
+      PASSWORD_FALLBACK_SELECTORS,
+    );
     const wait = auth.waitForUrl
       ? page.waitForURL(auth.waitForUrl, { timeout: 15_000 })
       : auth.waitForSelector
         ? page.waitForSelector(auth.waitForSelector, { timeout: 15_000 })
         : page.waitForLoadState("networkidle", { timeout: 15_000 });
-    await page.click(auth.submitButton, { timeout: 15_000 });
+    await clickFirstMatch(page, "submit", auth.submitButton, SUBMIT_FALLBACK_SELECTORS);
     await wait;
     return;
   }
@@ -754,6 +760,86 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       for (const [k, v] of items) sessionStorage.setItem(k, v);
     }, entries);
   }
+}
+
+/**
+ * Form-login resilience — when the user's chosen selector misses
+ * (e.g. they kept the default `input[name=email]` but their app uses
+ * `input[type=email]`), fall back through a list of common shapes
+ * before failing. The error message names every selector we tried so
+ * the user knows what to fix.
+ */
+const EMAIL_FALLBACK_SELECTORS: ReadonlyArray<string> = [
+  'input[type="email"]',
+  'input[name="email"]',
+  'input[name="username"]',
+  'input[name="user"]',
+  'input[name="login"]',
+  "input#email",
+  "input#username",
+  'input[autocomplete="username"]',
+  'input[autocomplete="email"]',
+];
+const PASSWORD_FALLBACK_SELECTORS: ReadonlyArray<string> = [
+  'input[type="password"]',
+  'input[name="password"]',
+  'input[name="pass"]',
+  "input#password",
+  'input[autocomplete="current-password"]',
+];
+const SUBMIT_FALLBACK_SELECTORS: ReadonlyArray<string> = [
+  'button[type="submit"]',
+  'input[type="submit"]',
+  "form button",
+  "[data-testid*=login i]",
+  "[data-testid*=signin i]",
+];
+
+async function fillFirstMatch(
+  page: Page,
+  fieldName: string,
+  primary: string,
+  value: string,
+  fallbacks: ReadonlyArray<string>,
+): Promise<void> {
+  const selectors = [primary, ...fallbacks.filter((s) => s !== primary)];
+  const tried: string[] = [];
+  for (const sel of selectors) {
+    tried.push(sel);
+    try {
+      await page.fill(sel, value, { timeout: sel === primary ? 4_000 : 1_500 });
+      return;
+    } catch {
+      // try next
+    }
+  }
+  throw new Error(
+    `auth (form): ${fieldName} field not found. Tried: ${tried.join(", ")}. ` +
+      `Open the login page in DevTools and update the selector.`,
+  );
+}
+
+async function clickFirstMatch(
+  page: Page,
+  fieldName: string,
+  primary: string,
+  fallbacks: ReadonlyArray<string>,
+): Promise<void> {
+  const selectors = [primary, ...fallbacks.filter((s) => s !== primary)];
+  const tried: string[] = [];
+  for (const sel of selectors) {
+    tried.push(sel);
+    try {
+      await page.click(sel, { timeout: sel === primary ? 4_000 : 1_500 });
+      return;
+    } catch {
+      // try next
+    }
+  }
+  throw new Error(
+    `auth (form): ${fieldName} button not found. Tried: ${tried.join(", ")}. ` +
+      `Update the selector to match your login form.`,
+  );
 }
 
 async function validateUrl(raw: string): Promise<{ ok: true } | RenderDemoFailure> {
@@ -1076,6 +1162,16 @@ async function discoverWithBrowser(
       }
     }
 
+    if (args.techniques.navClick && merged.size < args.maxPages) {
+      const found = await discoverViaNavClick(page, origin, args.url).catch(
+        () => [] as DiscoveredRoute[],
+      );
+      for (const r of found) {
+        addRoute(r);
+        if (merged.size >= args.maxPages) break;
+      }
+    }
+
     return Array.from(merged.values()).sort((a, b) => a.path.localeCompare(b.path));
   } finally {
     await ctx.close();
@@ -1279,6 +1375,107 @@ async function discoverViaLinks(
       queue.push({ url: child, depth: next.depth + 1 });
     }
   }
+  return results;
+}
+
+/**
+ * Click buttons inside <nav> / header / sidebar containers, watching for
+ * URL changes. Catches React-Router routes that render as `<button>` +
+ * onClick navigation rather than `<a href>` (link-crawl misses those).
+ *
+ * Safety:
+ *   - Only `<button type="button">`-style elements (skip submit).
+ *   - Skip text matching destructive keywords (sign out, delete, …).
+ *   - Cap at 12 candidates per session to keep budget bounded.
+ *   - Reload between clicks to reset DOM state.
+ */
+async function discoverViaNavClick(
+  page: Page,
+  origin: string,
+  startUrl: string,
+): Promise<DiscoveredRoute[]> {
+  // Collect button label texts. We re-query by text after each reload
+  // because React rerenders invalidate any positional selector.
+  const labels: unknown = await page
+    .evaluate(
+      `(() => {
+        const sels = [
+          'nav button',
+          'header button',
+          '[role="navigation"] button',
+          'aside button',
+          '.navbar button',
+          '.nav button',
+          '.sidebar button',
+          '[data-testid*="nav" i] button'
+        ];
+        const out = [];
+        const seen = new Set();
+        for (const sel of sels) {
+          for (const b of document.querySelectorAll(sel)) {
+            if (b.offsetParent === null) continue;
+            const t = (b.getAttribute('type') || 'button').toLowerCase();
+            if (t === 'submit' || t === 'reset') continue;
+            const text = (b.textContent || '').trim();
+            if (!text || text.length > 60) continue;
+            if (/delete|remove|sign\\s?out|logout|cancel|confirm|close/i.test(text)) continue;
+            if (seen.has(text)) continue;
+            seen.add(text);
+            out.push(text);
+            if (out.length >= 12) return out;
+          }
+        }
+        return out;
+      })()`,
+    )
+    .catch(() => [] as unknown);
+
+  if (!Array.isArray(labels) || labels.length === 0) return [];
+
+  const results: DiscoveredRoute[] = [];
+  const seenPaths = new Set<string>();
+
+  for (const labelRaw of labels) {
+    if (typeof labelRaw !== "string") continue;
+    const label = labelRaw;
+    try {
+      await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 8_000 });
+    } catch {
+      break; // origin offline mid-discover
+    }
+    // Use Playwright's text= selector with first(); narrow to nav-like
+    // containers via locator filter. `getByRole('button', { name })` is
+    // stricter than text= alone — exact-match by accessible name.
+    let clicked = false;
+    try {
+      const target = page.getByRole("button", { name: label, exact: true }).first();
+      await target.click({ timeout: 2_000 });
+      clicked = true;
+    } catch {
+      /* fall through — sometimes the role-name match misses; ignore */
+    }
+    if (!clicked) continue;
+
+    // Wait briefly for navigation; React Router sets URL synchronously
+    // but client-side hydration of the new view takes a beat.
+    await page.waitForTimeout(800);
+    const afterUrl = page.url();
+    if (afterUrl === startUrl || afterUrl === `${startUrl}/`) continue;
+    let parsed: URL;
+    try {
+      parsed = new URL(afterUrl);
+    } catch {
+      continue;
+    }
+    if (parsed.origin !== origin) continue;
+    const path = pathForResult(parsed, origin);
+    const norm = path.replace(/\/$/, "") || "/";
+    if (seenPaths.has(norm)) continue;
+    seenPaths.add(norm);
+    const title = await page.title().catch(() => "");
+    results.push({ path, title: title.slice(0, 200) || label, depth: 1, source: "nav" });
+  }
+
   return results;
 }
 

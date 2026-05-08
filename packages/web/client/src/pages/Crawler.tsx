@@ -959,18 +959,18 @@ export function Crawler() {
                 , <code>/billing</code>, …). Filters 404s.
               </span>
             </label>
-            <label className="discover-tech-row discover-tech-disabled">
+            <label className="discover-tech-row">
               <input
                 type="checkbox"
-                checked={false}
-                disabled={true}
-                aria-disabled="true"
-                onChange={() => undefined}
+                checked={techniques.navClick}
+                onChange={(e) => setTechniques((t) => ({ ...t, navClick: e.target.checked }))}
+                disabled={isDisabled}
               />
               <span className="discover-tech-name">Nav-click</span>
               <span className="discover-tech-desc">
-                <em>Coming in v0.2.x</em> — click buttons inside <code>&lt;nav&gt;</code> / header
-                to surface React-Router routes that aren't real anchors.
+                Click buttons inside <code>&lt;nav&gt;</code> / header / sidebar to surface
+                React-Router routes that aren't real anchors. Slow (reloads between clicks); skips
+                destructive labels (sign out, delete, …).
               </span>
             </label>
           </fieldset>

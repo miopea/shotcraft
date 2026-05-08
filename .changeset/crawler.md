@@ -45,8 +45,8 @@ all there. A "Forget saved settings" link in the page header clears
 everything. Captures and renders still live in the tab only — those
 move to IndexedDB in a later release.
 
-**Discovery v2** lands two new toggleable techniques alongside the
-existing link crawl:
+**Discovery v2** lands three new toggleable techniques alongside
+the existing link crawl:
 
 - **Sitemap.xml** — fetches `/sitemap.xml` through the page's
   post-auth context, parses `<loc>` entries. Cheap and authoritative
@@ -57,11 +57,26 @@ existing link crawl:
   identical body length, that length is the catch-all shell and
   those bogus matches are dropped. Real multi-page sites keep all
   their distinct hits.
+- **Nav-click** — clicks buttons inside `<nav>` / header / sidebar
+  containers (and `[role=navigation]`, `.navbar`, etc.) and watches
+  for URL changes. Catches React-Router routes that render as
+  `<button>` + onClick instead of `<a href>`. Capped at 12 buttons
+  per session, reloads between clicks to reset DOM state, skips any
+  text matching destructive keywords (sign out, delete, …).
 
 Each technique has its own checkbox in Step 1; results in the
-picker get a colored source badge (link/sitemap/common). Nav-click
-discovery is stubbed in the UI as "Coming in v0.2.x" — same
-machinery as modal-state crawl, ships as a follow-up.
+picker get a colored source badge (link/sitemap/common/nav).
+
+**Form-login resilience** — the engine now tries common alternative
+selectors when the user's chosen email/password/submit selector
+times out. Default selector chain:
+`input[type=email]` → `input[name=email]` → `input[name=username]` →
+`input[autocomplete=username]` etc. Same for password
+(`input[type=password]` first) and submit (`button[type=submit]`,
+`input[type=submit]`, `form button`). Failure messages name every
+selector tried so the user knows what to fix. No more "Timeout
+15000ms exceeded waiting for input[name=email]" against apps that
+use any other shape.
 
 **`shotcraft web` local mode** — `pnpm shotcraft web` (or `npx
 shotcraft web` after install) boots the same hosted-companion UI on
