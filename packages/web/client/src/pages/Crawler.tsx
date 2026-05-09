@@ -284,6 +284,7 @@ export function Crawler() {
   const [composites, setComposites] = useState<Record<string, ScreenComposite>>({});
 
   const [renderingAll, setRenderingAll] = useState(false);
+  const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [discoverState, setDiscoverState] = useState<DiscoverState>({ status: "idle" });
   const [techniques, setTechniques] = useState<DiscoverTechniques>(
@@ -1200,17 +1201,29 @@ export function Crawler() {
                   <div className="screen-card-cells">
                     {cellStatuses
                       .filter((cs) => cs.cap)
-                      .map((cs) => (
-                        <figure key={cs.key} className="screen-cell-preview">
-                          <img
-                            src={cs.cap?.rawBlobUrl}
-                            alt={`${s.name} ${cs.cell.template.displayName} ${cs.cell.theme}`}
-                          />
-                          <figcaption>
-                            {cs.cell.template.displayName} / {cs.cell.theme}
-                          </figcaption>
-                        </figure>
-                      ))}
+                      .map((cs) => {
+                        const caption = `${s.name} — ${cs.cell.template.displayName} / ${cs.cell.theme}`;
+                        return (
+                          <figure key={cs.key} className="screen-cell-preview">
+                            <button
+                              type="button"
+                              className="cell-preview-btn"
+                              onClick={() =>
+                                cs.cap && setLightbox({ src: cs.cap.rawBlobUrl, caption })
+                              }
+                              aria-label={`Enlarge ${caption}`}
+                            >
+                              <img
+                                src={cs.cap?.rawBlobUrl}
+                                alt={`${s.name} ${cs.cell.template.displayName} ${cs.cell.theme}`}
+                              />
+                            </button>
+                            <figcaption>
+                              {cs.cell.template.displayName} / {cs.cell.theme}
+                            </figcaption>
+                          </figure>
+                        );
+                      })}
                   </div>
                 )}
               </article>
@@ -1290,9 +1303,14 @@ export function Crawler() {
               const filename = `${screen?.name ?? "screen"}-${c.templateId}-${c.theme}.png`;
               return (
                 <article key={mediaKey(c.inputId, c.templateId, c.theme)} className="gallery-card">
-                  <div className="gallery-card-preview">
+                  <button
+                    type="button"
+                    className="gallery-card-preview gallery-card-preview-btn"
+                    onClick={() => setLightbox({ src: c.pngBlobUrl, caption: filename })}
+                    aria-label={`Enlarge ${filename}`}
+                  >
                     <img src={c.pngBlobUrl} alt={filename} />
-                  </div>
+                  </button>
                   <div className="gallery-card-body">
                     <h3>{filename}</h3>
                     <div className="gallery-card-meta">
@@ -1309,7 +1327,46 @@ export function Crawler() {
           </div>
         </section>
       )}
+
+      {lightbox && (
+        <Lightbox src={lightbox.src} caption={lightbox.caption} onClose={() => setLightbox(null)} />
+      )}
     </section>
+  );
+}
+
+function Lightbox({
+  src,
+  caption,
+  onClose,
+}: {
+  src: string;
+  caption: string;
+  onClose: () => void;
+}) {
+  // Esc closes the lightbox; backdrop click closes; image click stays.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="lightbox-backdrop" onClick={onClose} role="dialog" aria-label={caption}>
+      <button
+        type="button"
+        className="lightbox-close"
+        onClick={onClose}
+        aria-label="Close enlarged image"
+      >
+        ✕
+      </button>
+      <figure className="lightbox-figure" onClick={(e) => e.stopPropagation()}>
+        <img src={src} alt={caption} />
+        <figcaption>{caption}</figcaption>
+      </figure>
+    </div>
   );
 }
 

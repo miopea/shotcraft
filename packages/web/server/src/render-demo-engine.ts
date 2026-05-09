@@ -20,7 +20,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { lookup as dnsLookup } from "node:dns/promises";
-import { chromium, type Browser, type Page } from "playwright";
+import { createHash } from "node:crypto";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import type { TemplateInfo } from "./registry.js";
 import { TEMPLATE_REGISTRY } from "./registry.js";
 
@@ -124,6 +125,73 @@ function engineLog(phase: string, data?: Record<string, unknown>): void {
   const elapsed = Date.now() - ENGINE_START;
   const payload = data ? ` ${JSON.stringify(data)}` : "";
   process.stdout.write(`[shotcraft-engine][+${elapsed}ms][${phase}]${payload}\n`);
+}
+
+/**
+ * Cache of post-auth Playwright `storageState` (cookies + localStorage)
+ * keyed by a hash of the auth config + target origin. After a
+ * successful auth, subsequent captures within the TTL reuse the
+ * stored cookies and skip the login entirely — no more rate-limit
+ * errors from re-authing 8 times in a row against the same target.
+ *
+ * Module-level (per Express process). Hash includes the password so
+ * different users with the same target URL but different creds get
+ * different cache entries. A user with the same creds gets the same
+ * cache, which is correct.
+ *
+ * TTL is short on purpose — sessions DO expire server-side, and a
+ * stale storageState would silently show login pages instead of
+ * dashboard content. 5 minutes covers a typical batch capture run.
+ */
+type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
+const AUTH_STATE_TTL_MS = 5 * 60 * 1000;
+const authStateCache = new Map<string, { state: StorageState; expiresAt: number }>();
+
+function authCacheKey(auth: RenderDemoAuth, targetUrl: string): string {
+  const origin = (() => {
+    try {
+      return new URL(targetUrl).origin;
+    } catch {
+      return targetUrl;
+    }
+  })();
+  const h = createHash("sha256");
+  h.update(auth.type);
+  h.update("|");
+  h.update(origin);
+  h.update("|");
+  if (auth.type === "form") {
+    h.update(auth.email);
+    h.update("|");
+    h.update(auth.password);
+    h.update("|");
+    h.update(auth.url);
+  } else if (auth.type === "api") {
+    h.update(auth.url);
+    h.update("|");
+    h.update(JSON.stringify(auth.body));
+  } else {
+    h.update(JSON.stringify(auth.cookies ?? []));
+    h.update("|");
+    h.update(JSON.stringify(auth.localStorage ?? {}));
+  }
+  return h.digest("hex");
+}
+
+function getCachedAuthState(auth: RenderDemoAuth, targetUrl: string): StorageState | null {
+  const key = authCacheKey(auth, targetUrl);
+  const entry = authStateCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    authStateCache.delete(key);
+    return null;
+  }
+  return entry.state;
+}
+
+function putCachedAuthState(auth: RenderDemoAuth, targetUrl: string, state: StorageState): void {
+  const key = authCacheKey(auth, targetUrl);
+  authStateCache.set(key, { state, expiresAt: Date.now() + AUTH_STATE_TTL_MS });
 }
 
 /** Snapshot the page's current state for diagnostic logging. */
@@ -466,6 +534,12 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
   const tmp = await mkdtemp(join(tmpdir(), "shotcraft-cap-"));
   const rawPath = join(tmp, "raw.png");
   try {
+    // Reuse cached cookies/localStorage if a recent capture already
+    // authenticated against this target — avoids hammering the
+    // target's auth endpoint on every screen capture, which triggers
+    // rate limits on apps like BudgetBug ("Too many attempts" after
+    // 5+ logins in a row).
+    const cachedState = args.auth ? getCachedAuthState(args.auth, args.url) : null;
     const ctx = await browser.newContext({
       viewport: { width: args.viewport.width, height: args.viewport.height },
       deviceScaleFactor: args.viewport.dpr,
@@ -478,12 +552,25 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
       // Playwright UA contains "HeadlessChrome" which Cloudflare /
       // PerimeterX flag immediately.
       userAgent: STEALTH_UA,
+      ...(cachedState ? { storageState: cachedState } : {}),
     });
     await ctx.addInitScript(STEALTH_INIT_SCRIPT);
     const page = await ctx.newPage();
     try {
-      if (args.auth) {
+      if (args.auth && !cachedState) {
+        engineLog("capture.auth.fresh", { reason: "no-cache" });
         await runTargetAuth(page, args.url, args.auth);
+        // Cache the post-auth storage state so subsequent captures
+        // skip the login.
+        try {
+          const state = await ctx.storageState();
+          putCachedAuthState(args.auth, args.url, state);
+          engineLog("capture.auth.cached");
+        } catch {
+          // Cache failure is non-fatal; we'll re-auth next time.
+        }
+      } else if (args.auth && cachedState) {
+        engineLog("capture.auth.cache-hit");
       }
       await page.goto(args.url, { waitUntil: "networkidle", timeout: 25_000 });
       // Run setup actions first (dismiss tour modal, accept cookie
@@ -1559,25 +1646,40 @@ async function discoverWithBrowser(
 ): Promise<DiscoverResult> {
   const start = new URL(args.url);
   const origin = start.origin;
+  const cachedState = args.auth ? getCachedAuthState(args.auth, args.url) : null;
   const ctx = await browser.newContext({
     viewport: { width: 1280, height: 800 },
     deviceScaleFactor: 1,
     locale: "en-US",
     reducedMotion: "reduce",
     userAgent: STEALTH_UA,
+    ...(cachedState ? { storageState: cachedState } : {}),
   });
   await ctx.addInitScript(STEALTH_INIT_SCRIPT);
   try {
     const page = await ctx.newPage();
-    engineLog("discover.context-ready", { startUrl: args.url, techniques: args.techniques });
+    engineLog("discover.context-ready", {
+      startUrl: args.url,
+      techniques: args.techniques,
+      cacheHit: !!cachedState,
+    });
 
     // After auth, the user typically lands on /dashboard or similar.
     // We use that as the discover start instead of the original target
     // URL — re-navigating to the public marketing root after login
     // throws away the authenticated UI we actually want to discover.
     let discoverStart = args.url;
-    if (args.auth) {
+    if (args.auth && !cachedState) {
       await runTargetAuth(page, args.url, args.auth);
+      try {
+        const state = await ctx.storageState();
+        putCachedAuthState(args.auth, args.url, state);
+        engineLog("discover.auth.cached");
+      } catch {
+        // best-effort; continue
+      }
+    }
+    if (args.auth) {
       const postAuth = page.url();
       if (postAuth && postAuth !== "about:blank") {
         try {
