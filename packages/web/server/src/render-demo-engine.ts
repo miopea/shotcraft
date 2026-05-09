@@ -821,16 +821,37 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
     await page.waitForTimeout(2_000);
 
     // After auth is verified done (password gone OR URL changed), wait
-    // for the post-auth dashboard's content fetches to settle. Real
-    // SPAs do auth → render shell ("Loading...") → fetch dashboard
-    // data → render content. Without this wait, downstream techniques
-    // (link-crawl, nav-click) run against the "Loading..." shell and
-    // find no real nav.
+    // for the post-auth dashboard to actually render content — not just
+    // a "Loading..." shell. Race two signals:
     //
-    // Different from the earlier networkidle-in-the-race attempt —
-    // that fired during auth itself and was unreliable. Placed AFTER
-    // auth-done, networkidle reliably catches the dashboard data-load.
-    await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
+    //   1. networkidle — fires for normal SPAs that finish their data
+    //      fetches after login.
+    //   2. Content heuristic — fires when the dashboard has rendered
+    //      enough interactive elements (>4 visible buttons OR a
+    //      populated nav). Catches apps where networkidle never
+    //      settles (websockets, polling, analytics).
+    //
+    // First-to-fire wins, then a small final settle. 15s ceiling per
+    // technique — a slow dashboard load shouldn't add more than that.
+    await Promise.race([
+      page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => null),
+      page
+        .waitForFunction(
+          `(() => {
+            const visibleButtons = Array.from(document.querySelectorAll('button'))
+              .filter((b) => b.offsetParent !== null);
+            if (visibleButtons.length > 4) return true;
+            const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar');
+            if (nav && nav.offsetParent !== null) {
+              const navItems = nav.querySelectorAll('a, button, [role="link"]');
+              if (navItems.length > 2) return true;
+            }
+            return false;
+          })()`,
+          { timeout: 15_000 },
+        )
+        .catch(() => null),
+    ]);
     // Final small settle for chart/animation renders that may follow
     // the data fetch.
     await page.waitForTimeout(500);
