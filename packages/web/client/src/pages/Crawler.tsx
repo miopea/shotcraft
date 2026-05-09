@@ -146,11 +146,23 @@ const DEFAULT_TECHNIQUES: DiscoverTechniques = {
   navClick: false,
 };
 
+interface DiscoverSummary {
+  startUrl: string;
+  perTechnique: { link: number; sitemap: number; common: number; nav: number };
+  finalCount: number;
+  finalScreenshot?: string;
+}
+
 type DiscoverState =
   | { status: "idle" }
   | { status: "running" }
   | { status: "error"; message: string; errorScreenshot?: string }
-  | { status: "ready"; routes: ReadonlyArray<DiscoveredRoute>; selected: Set<string> };
+  | {
+      status: "ready";
+      routes: ReadonlyArray<DiscoveredRoute>;
+      selected: Set<string>;
+      summary?: DiscoverSummary;
+    };
 
 function rid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -455,13 +467,21 @@ export function Crawler() {
         }
         throw e;
       }
-      const data = (await res.json()) as { routes: DiscoveredRoute[] };
+      const data = (await res.json()) as {
+        routes: DiscoveredRoute[];
+        summary?: DiscoverSummary;
+      };
       const existing = new Set(screens.map((s) => normalizeRoute(s.route)));
       const selected = new Set<string>();
       for (const r of data.routes) {
         if (!existing.has(normalizeRoute(r.path))) selected.add(r.path);
       }
-      setDiscoverState({ status: "ready", routes: data.routes, selected });
+      setDiscoverState({
+        status: "ready",
+        routes: data.routes,
+        selected,
+        ...(data.summary ? { summary: data.summary } : {}),
+      });
     } catch (err) {
       const screenshot =
         err instanceof Error && "errorScreenshot" in err && typeof err.errorScreenshot === "string"
@@ -481,7 +501,12 @@ export function Crawler() {
       const next = new Set(prev.selected);
       if (next.has(path)) next.delete(path);
       else next.add(path);
-      return { status: "ready", routes: prev.routes, selected: next };
+      return {
+        status: "ready",
+        routes: prev.routes,
+        selected: next,
+        ...(prev.summary ? { summary: prev.summary } : {}),
+      };
     });
   };
 
@@ -490,7 +515,12 @@ export function Crawler() {
       if (prev.status !== "ready") return prev;
       const next = new Set<string>();
       if (pick) for (const r of prev.routes) next.add(r.path);
-      return { status: "ready", routes: prev.routes, selected: next };
+      return {
+        status: "ready",
+        routes: prev.routes,
+        selected: next,
+        ...(prev.summary ? { summary: prev.summary } : {}),
+      };
     });
   };
 
@@ -1718,6 +1748,8 @@ function DiscoverPanel({
         : null
     : null;
 
+  const summary = state.status === "ready" ? state.summary : undefined;
+
   return (
     <div className="discover-panel discover-panel-ready">
       {hint && (
@@ -1730,6 +1762,13 @@ function DiscoverPanel({
           Discovered {total} route{total === 1 ? "" : "s"}
         </strong>
         <span className="discover-panel-meta">{picked} selected</span>
+        {summary && (
+          <span className="discover-panel-meta">
+            {`from ${summary.startUrl}`} • {`link:${summary.perTechnique.link}`} •{" "}
+            {`sitemap:${summary.perTechnique.sitemap}`} • {`common:${summary.perTechnique.common}`}{" "}
+            • {`nav:${summary.perTechnique.nav}`}
+          </span>
+        )}
         <div className="discover-panel-tools">
           <button type="button" onClick={onSelectAll}>
             All
@@ -1776,6 +1815,15 @@ function DiscoverPanel({
           Add {picked} as screen{picked === 1 ? "" : "s"}
         </button>
       </div>
+      {summary?.finalScreenshot && (
+        <details className="discover-final-screenshot">
+          <summary>Final page state (what the engine was crawling)</summary>
+          <img
+            src={`data:image/png;base64,${summary.finalScreenshot}`}
+            alt="Page state at end of discovery"
+          />
+        </details>
+      )}
     </div>
   );
 }

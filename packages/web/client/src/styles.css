@@ -1217,6 +1217,32 @@ label {
   justify-content: flex-end;
 }
 
+.discover-final-screenshot {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg);
+}
+
+.discover-final-screenshot > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.discover-final-screenshot img {
+  display: block;
+  margin-top: 0.6rem;
+  width: 100%;
+  height: auto;
+  max-height: 480px;
+  object-fit: contain;
+  background: #000;
+  border-radius: 0.3rem;
+}
+
 /* Footer */
 
 .footer {

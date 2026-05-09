@@ -1208,6 +1208,22 @@ export interface DiscoveredRoute {
   source: "link" | "sitemap" | "common" | "nav";
 }
 
+export interface DiscoverSummary {
+  /** Which URL each technique actually crawled from (post-auth). */
+  startUrl: string;
+  /** Number of routes contributed by each technique (pre-dedup). */
+  perTechnique: { link: number; sitemap: number; common: number; nav: number };
+  /** Number of routes after dedup (matches the returned routes length). */
+  finalCount: number;
+  /** Base64 PNG of the page state after all techniques finished. */
+  finalScreenshot?: string;
+}
+
+export interface DiscoverResult {
+  routes: DiscoveredRoute[];
+  summary: DiscoverSummary;
+}
+
 /**
  * Default probe list for the `commonRoutes` technique. These are paths
  * a typical SaaS app exposes; we GET each one through the page's auth
@@ -1243,9 +1259,7 @@ const DISCOVER_HARD_CAPS = {
   maxPages: 60,
 } as const;
 
-export async function discoverRoutes(
-  req: DiscoverRequest,
-): Promise<EngineResult<DiscoveredRoute[]>> {
+export async function discoverRoutes(req: DiscoverRequest): Promise<EngineResult<DiscoverResult>> {
   if (!req || typeof req !== "object") {
     return { ok: false, status: 400, error: "Request must be a JSON object." };
   }
@@ -1319,7 +1333,7 @@ interface RunDiscoverArgs {
   auth?: RenderDemoAuth;
 }
 
-async function runDiscover(args: RunDiscoverArgs): Promise<DiscoveredRoute[]> {
+async function runDiscover(args: RunDiscoverArgs): Promise<DiscoverResult> {
   const browser = await chromium.launch({ headless: true });
   try {
     return await discoverWithBrowser(browser, args);
@@ -1331,7 +1345,7 @@ async function runDiscover(args: RunDiscoverArgs): Promise<DiscoveredRoute[]> {
 async function discoverWithBrowser(
   browser: Browser,
   args: RunDiscoverArgs,
-): Promise<DiscoveredRoute[]> {
+): Promise<DiscoverResult> {
   const start = new URL(args.url);
   const origin = start.origin;
   const ctx = await browser.newContext({
@@ -1391,8 +1405,14 @@ async function discoverWithBrowser(
     // post-auth redirect comment above.
     const techArgs: RunDiscoverArgs = { ...args, url: discoverStart };
 
+    // Per-technique counts (pre-dedup) — surfaced to the UI so the
+    // operator sees which technique actually contributed routes
+    // and which fell flat.
+    const perTechnique = { link: 0, sitemap: 0, common: 0, nav: 0 };
+
     if (args.techniques.sitemap) {
       const found = await discoverViaSitemap(page, origin).catch(() => [] as DiscoveredRoute[]);
+      perTechnique.sitemap = found.length;
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1404,6 +1424,7 @@ async function discoverWithBrowser(
       const found = await discoverViaCommonRoutes(page, origin, list).catch(
         () => [] as DiscoveredRoute[],
       );
+      perTechnique.common = found.length;
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1414,6 +1435,7 @@ async function discoverWithBrowser(
       const found = await discoverViaLinks(page, origin, techArgs).catch(
         () => [] as DiscoveredRoute[],
       );
+      perTechnique.link = found.length;
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1424,13 +1446,32 @@ async function discoverWithBrowser(
       const found = await discoverViaNavClick(page, origin, discoverStart).catch(
         () => [] as DiscoveredRoute[],
       );
+      perTechnique.nav = found.length;
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
       }
     }
 
-    return Array.from(merged.values()).sort((a, b) => a.path.localeCompare(b.path));
+    // Final-state screenshot — captures whatever the page settled on
+    // after all techniques ran. Lets the operator see what we were
+    // actually crawling (was auth applied? did we land on the
+    // dashboard? what does the post-auth UI look like?).
+    const finalScreenshot = await page
+      .screenshot({ fullPage: false, type: "png" })
+      .then((buf) => buf.toString("base64"))
+      .catch(() => undefined);
+
+    const routes = Array.from(merged.values()).sort((a, b) => a.path.localeCompare(b.path));
+    return {
+      routes,
+      summary: {
+        startUrl: discoverStart,
+        perTechnique,
+        finalCount: routes.length,
+        ...(finalScreenshot ? { finalScreenshot } : {}),
+      },
+    };
   } finally {
     await ctx.close();
   }

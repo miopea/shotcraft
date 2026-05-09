@@ -85,7 +85,7 @@ discoverRouter.post("/", (req, res) => {
         return;
       }
       res.set("Cache-Control", "no-store");
-      res.json({ routes: result.value });
+      res.json({ routes: result.value.routes, summary: result.value.summary });
     })
     .catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
