@@ -78,6 +78,36 @@ export type ScreenAction =
 
 const MAX_ACTIONS = 20;
 
+/**
+ * Standard launch options applied to every Chromium spawn. The flags
+ * here defeat the most common headless-Chromium fingerprints that
+ * bot-management products (Cloudflare, PerimeterX, etc.) check first.
+ *
+ * Verified diagnosis: the same login flow works from a residential
+ * IP (this developer machine) but hangs at "Loading..." from the
+ * Azure App Service IP — Cloudflare bot management was challenging
+ * data-fetch requests from the App Service IP block when the
+ * browser advertised `navigator.webdriver: true`. Hiding that signal
+ * + setting a real Chrome UA closes the gap.
+ */
+const LAUNCH_OPTS = {
+  headless: true,
+  args: [
+    // Suppresses the "AutomationControlled" feature that adds the
+    // most-checked bot signal (navigator.webdriver === true).
+    "--disable-blink-features=AutomationControlled",
+  ],
+};
+
+/** A real Chrome UA on macOS — most realistic without claiming to be a specific OS we're not. */
+const STEALTH_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+/** Attaches to every newContext() — hides remaining bot signals. */
+const STEALTH_INIT_SCRIPT = `
+  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+`;
+
 export interface RenderDemoRequest {
   url: string;
   caption: string;
@@ -158,7 +188,7 @@ async function runOne(
   req: RenderDemoRequest,
   wrapperPath: string,
 ): Promise<Buffer> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(LAUNCH_OPTS);
   try {
     const raw = await captureWithBrowser(browser, {
       url: req.url,
@@ -349,7 +379,7 @@ export async function composeScreen(req: ComposeScreenRequest): Promise<EngineRe
 }
 
 async function runCapture(req: CaptureScreenRequest): Promise<Buffer> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(LAUNCH_OPTS);
   try {
     return await captureWithBrowser(browser, req);
   } finally {
@@ -363,7 +393,7 @@ async function runCompose(
   wrapperPath: string,
   req: ComposeScreenRequest,
 ): Promise<Buffer> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(LAUNCH_OPTS);
   try {
     return await composeWithBrowser(browser, {
       raw: req.raw,
@@ -401,7 +431,12 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
       colorScheme: args.theme ?? "dark",
       locale: "en-US",
       reducedMotion: "reduce",
+      // Real Chrome UA — defeats UA-based bot detection. The default
+      // Playwright UA contains "HeadlessChrome" which Cloudflare /
+      // PerimeterX flag immediately.
+      userAgent: STEALTH_UA,
     });
+    await ctx.addInitScript(STEALTH_INIT_SCRIPT);
     const page = await ctx.newPage();
     try {
       if (args.auth) {
@@ -1442,7 +1477,7 @@ interface RunDiscoverArgs {
 }
 
 async function runDiscover(args: RunDiscoverArgs): Promise<DiscoverResult> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(LAUNCH_OPTS);
   try {
     return await discoverWithBrowser(browser, args);
   } finally {
@@ -1461,7 +1496,9 @@ async function discoverWithBrowser(
     deviceScaleFactor: 1,
     locale: "en-US",
     reducedMotion: "reduce",
+    userAgent: STEALTH_UA,
   });
+  await ctx.addInitScript(STEALTH_INIT_SCRIPT);
   try {
     const page = await ctx.newPage();
 
