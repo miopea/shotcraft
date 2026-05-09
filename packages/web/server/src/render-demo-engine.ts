@@ -88,6 +88,8 @@ export interface RenderDemoRequest {
   auth?: RenderDemoAuth;
   /** Optional script — click/fill/wait between goto and screenshot. */
   actions?: ReadonlyArray<ScreenAction>;
+  /** Run after goto, before per-screen actions (dismiss tour, etc.). */
+  setupActions?: ReadonlyArray<ScreenAction>;
 }
 
 export interface RenderDemoSuccess {
@@ -165,6 +167,7 @@ async function runOne(
       theme,
       ...(req.auth ? { auth: req.auth } : {}),
       ...(req.actions ? { actions: req.actions } : {}),
+      ...(req.setupActions ? { setupActions: req.setupActions } : {}),
       waitMs: 1200,
     });
     return await composeWithBrowser(browser, {
@@ -197,6 +200,14 @@ export interface CaptureScreenRequest {
   waitMs?: number;
   /** Optional script: run these in order after goto, before screenshot. */
   actions?: ReadonlyArray<ScreenAction>;
+  /**
+   * Actions that run AFTER goto but BEFORE per-screen `actions` —
+   * used for one-time-per-session things like dismissing tour modals
+   * or accepting cookie banners. Each capture uses a fresh browser
+   * context, so any "remember I dismissed this" state stored in
+   * localStorage is lost — setup needs to re-run per capture.
+   */
+  setupActions?: ReadonlyArray<ScreenAction>;
 }
 
 export interface ComposeScreenRequest {
@@ -253,6 +264,10 @@ export async function captureScreen(req: CaptureScreenRequest): Promise<EngineRe
   if (req.actions !== undefined) {
     const actionsError = validateActions(req.actions);
     if (actionsError) return actionsError;
+  }
+  if (req.setupActions !== undefined) {
+    const setupErr = validateActions(req.setupActions);
+    if (setupErr) return setupErr;
   }
   const urlCheck = await validateUrl(req.url);
   if (!urlCheck.ok) return urlCheck;
@@ -371,6 +386,7 @@ interface CaptureWithBrowserArgs {
   auth?: RenderDemoAuth;
   waitMs?: number;
   actions?: ReadonlyArray<ScreenAction>;
+  setupActions?: ReadonlyArray<ScreenAction>;
 }
 
 async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs): Promise<Buffer> {
@@ -392,6 +408,18 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
         await runTargetAuth(page, args.url, args.auth);
       }
       await page.goto(args.url, { waitUntil: "networkidle", timeout: 25_000 });
+      // Run setup actions first (dismiss tour modal, accept cookie
+      // banner, etc.) — these apply to every screen because each
+      // capture uses a fresh browser context with empty localStorage.
+      if (args.setupActions && args.setupActions.length > 0) {
+        try {
+          await runActions(page, args.setupActions);
+        } catch (err) {
+          throw new Error(`setupActions: ${err instanceof Error ? err.message : String(err)}`, {
+            cause: err,
+          });
+        }
+      }
       // Run user-supplied actions (click / fill / wait / etc.) between
       // navigation and screenshot so the Crawler can drive into modals,
       // search results, multi-step flows.

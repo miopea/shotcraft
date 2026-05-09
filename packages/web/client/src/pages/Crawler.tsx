@@ -219,6 +219,25 @@ function mergeAuth(loaded: AuthState | undefined): AuthState {
   return { ...DEFAULT_AUTH, ...loaded };
 }
 
+/**
+ * Parse the auth.setupActionsJson textarea into an array of actions
+ * (or undefined if empty). Throws with a clear message on parse error
+ * so the user sees "Setup actions JSON parse failed" instead of an
+ * opaque downstream HTTP error.
+ */
+function parseSetupActionsOrThrow(json: string): unknown {
+  const trimmed = json.trim();
+  if (trimmed.length === 0) return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    throw new Error(
+      `Setup actions JSON parse failed: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
+  }
+}
+
 function loadPersisted(): Partial<PersistedSession> {
   try {
     const raw = localStorage.getItem(PERSIST_KEY);
@@ -464,20 +483,7 @@ export function Crawler() {
       }
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token.trim().length > 0) headers.Authorization = `Bearer ${token.trim()}`;
-      // Parse post-login setup actions if user provided any. JSON
-      // parse failure is fatal (better to stop than send invalid body).
-      let setupActions: unknown = undefined;
-      const setupRaw = auth.setupActionsJson.trim();
-      if (setupRaw.length > 0) {
-        try {
-          setupActions = JSON.parse(setupRaw);
-        } catch (err) {
-          throw new Error(
-            `Setup actions JSON parse failed: ${err instanceof Error ? err.message : String(err)}`,
-            { cause: err },
-          );
-        }
-      }
+      const setupActions = parseSetupActionsOrThrow(auth.setupActionsJson);
 
       const res = await fetch("/api/discover", {
         method: "POST",
@@ -669,6 +675,7 @@ export function Crawler() {
 
     // Strip per-action client `id` before sending — server doesn't need it.
     const wireActions = screen.actions.map(({ id: _id, ...rest }) => rest);
+    const setupActions = parseSetupActionsOrThrow(auth.setupActionsJson);
     const res = await fetch("/api/capture", {
       method: "POST",
       headers,
@@ -679,6 +686,7 @@ export function Crawler() {
         theme,
         ...(authPayload ? { auth: authPayload } : {}),
         ...(wireActions.length > 0 ? { actions: wireActions } : {}),
+        ...(setupActions !== undefined ? { setupActions } : {}),
       }),
     });
 

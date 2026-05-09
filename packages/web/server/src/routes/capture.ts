@@ -65,6 +65,9 @@ captureRouter.post("/", (req, res) => {
   const actions = Array.isArray(body.actions)
     ? (body.actions as ReadonlyArray<ScreenAction>)
     : undefined;
+  const setupActions = Array.isArray(body.setupActions)
+    ? (body.setupActions as ReadonlyArray<ScreenAction>)
+    : undefined;
 
   void captureScreen({
     url: typeof body.url === "string" ? body.url : "",
@@ -78,6 +81,7 @@ captureRouter.post("/", (req, res) => {
     ...(typeof body.waitMs === "number" ? { waitMs: body.waitMs } : {}),
     ...(auth ? { auth } : {}),
     ...(actions ? { actions } : {}),
+    ...(setupActions ? { setupActions } : {}),
   })
     .then((result) => {
       if (!result.ok) {
