@@ -1037,7 +1037,21 @@ export async function fillFirstMatch(
   for (const sel of selectors) {
     tried.push(sel);
     try {
-      await page.fill(sel, value, { timeout: sel === primary ? 4_000 : 1_500 });
+      const locator = page.locator(sel).first();
+      // Focus by clicking first — also confirms the selector matches
+      // a real visible element. Tighter timeout for fallback selectors
+      // so the worst-case total stays under ~6s.
+      await locator.click({ timeout: sel === primary ? 4_000 : 1_500 });
+      // Clear any pre-filled value (browser autocomplete, etc.).
+      await locator.fill("", { timeout: 2_000 });
+      // Type with real keystrokes. `page.fill()` programmatically sets
+      // the DOM value and dispatches an `input` event, but some React
+      // controlled-input setups don't react to that — internal state
+      // stays empty, the form submits with no credentials, and the
+      // server silently rejects. pressSequentially fires the full
+      // keydown/keypress/input/keyup sequence per character, which
+      // every framework's onChange handler picks up.
+      await locator.pressSequentially(value, { delay: 25 });
       return;
     } catch {
       // try next
