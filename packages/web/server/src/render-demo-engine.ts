@@ -1219,6 +1219,16 @@ export interface DiscoverRequest {
   techniques?: DiscoverTechniques;
   /** Override for `commonRoutes` probe list. Defaults to COMMON_ROUTES. */
   commonRouteList?: ReadonlyArray<string>;
+  /**
+   * Actions to run once after auth (or after initial nav if no auth)
+   * before discovery techniques run. Use this to dismiss tour modals,
+   * accept cookie banners, click past onboarding, etc. — anything
+   * that's covering the actual UI you want to crawl.
+   *
+   * Same shape as per-screen `actions`: click / fill / press / wait
+   * / waitForSelector / waitForUrl / scroll.
+   */
+  setupActions?: ReadonlyArray<ScreenAction>;
 }
 
 export interface DiscoverTechniques {
@@ -1322,6 +1332,11 @@ export async function discoverRoutes(req: DiscoverRequest): Promise<EngineResult
     navClick: req.techniques?.navClick ?? false,
   };
 
+  if (req.setupActions !== undefined) {
+    const actionsError = validateActions(req.setupActions);
+    if (actionsError) return actionsError;
+  }
+
   const job = inflight.then(() =>
     withDeadline(
       60_000,
@@ -1332,6 +1347,7 @@ export async function discoverRoutes(req: DiscoverRequest): Promise<EngineResult
         techniques,
         ...(req.commonRouteList ? { commonRouteList: req.commonRouteList } : {}),
         ...(req.auth ? { auth: req.auth } : {}),
+        ...(req.setupActions ? { setupActions: req.setupActions } : {}),
       }),
     ),
   );
@@ -1358,6 +1374,7 @@ interface RunDiscoverArgs {
   techniques: Required<DiscoverTechniques>;
   commonRouteList?: ReadonlyArray<string>;
   auth?: RenderDemoAuth;
+  setupActions?: ReadonlyArray<ScreenAction>;
 }
 
 async function runDiscover(args: RunDiscoverArgs): Promise<DiscoverResult> {
@@ -1416,6 +1433,19 @@ async function discoverWithBrowser(
         // Even if the initial nav fails we let the techniques try; sitemap
         // + common-routes fetches still work as long as the origin is
         // reachable.
+      }
+    }
+
+    // Run user-supplied post-auth setup actions (dismiss tour modal,
+    // accept cookie banner, etc.) before discovery techniques. If any
+    // action fails, we surface the error — discovery against a
+    // half-dismissed modal would just produce confusing partial results.
+    if (args.setupActions && args.setupActions.length > 0) {
+      try {
+        await runActions(page, args.setupActions);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`setupActions: ${msg}`, { cause: err });
       }
     }
 

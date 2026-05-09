@@ -25,6 +25,13 @@ interface AuthState {
   waitForUrl: string;
   cookiesJson: string;
   localStorageJson: string;
+  /**
+   * JSON array of post-login actions (click/fill/wait/etc.) to run
+   * once after auth completes, before discovery / capture techniques.
+   * Common use: dismiss a tour modal or cookie banner that's covering
+   * the UI we want to crawl.
+   */
+  setupActionsJson: string;
 }
 
 const DEFAULT_AUTH: AuthState = {
@@ -40,6 +47,7 @@ const DEFAULT_AUTH: AuthState = {
   waitForUrl: "",
   cookiesJson: "",
   localStorageJson: "",
+  setupActionsJson: "",
 };
 
 /**
@@ -445,6 +453,21 @@ export function Crawler() {
       }
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token.trim().length > 0) headers.Authorization = `Bearer ${token.trim()}`;
+      // Parse post-login setup actions if user provided any. JSON
+      // parse failure is fatal (better to stop than send invalid body).
+      let setupActions: unknown = undefined;
+      const setupRaw = auth.setupActionsJson.trim();
+      if (setupRaw.length > 0) {
+        try {
+          setupActions = JSON.parse(setupRaw);
+        } catch (err) {
+          throw new Error(
+            `Setup actions JSON parse failed: ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err },
+          );
+        }
+      }
+
       const res = await fetch("/api/discover", {
         method: "POST",
         headers,
@@ -452,6 +475,7 @@ export function Crawler() {
           url: target,
           techniques,
           ...(authPayload ? { auth: authPayload } : {}),
+          ...(setupActions !== undefined ? { setupActions } : {}),
         }),
       });
       if (!res.ok) {
@@ -1422,6 +1446,25 @@ function AuthFieldset({ auth, update, disabled }: AuthFieldsetProps) {
           </div>
         </>
       )}
+
+      <div className="field">
+        <label>Post-login setup actions (JSON array, optional)</label>
+        <textarea
+          rows={4}
+          value={auth.setupActionsJson}
+          onChange={(e) => update("setupActionsJson", e.target.value)}
+          disabled={disabled}
+          spellCheck={false}
+          placeholder={`[\n  { "type": "click", "selector": "button:has-text(\\"Skip tour\\")" }\n]`}
+        />
+        <p className="field-hint">
+          Run once after login (or initial nav) before discovery / capture techniques. Use this to
+          dismiss tour modals, accept cookie banners, or click past onboarding. Same shape as
+          per-screen actions: <code>click</code>, <code>fill</code>, <code>press</code>,{" "}
+          <code>wait</code>, <code>waitForSelector</code>, <code>waitForUrl</code>,{" "}
+          <code>scroll</code>.
+        </p>
+      </div>
     </fieldset>
   );
 }

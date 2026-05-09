@@ -22,6 +22,7 @@ import {
   discoverRoutes,
   type DiscoverTechniques,
   type RenderDemoAuth,
+  type ScreenAction,
 } from "../render-demo-engine.js";
 
 export const discoverRouter: Router = Router();
@@ -69,12 +70,17 @@ discoverRouter.post("/", (req, res) => {
       ? (body.techniques as DiscoverTechniques)
       : undefined;
 
+  const setupActions = Array.isArray(body.setupActions)
+    ? (body.setupActions as ReadonlyArray<ScreenAction>)
+    : undefined;
+
   void discoverRoutes({
     url: typeof body.url === "string" ? body.url : "",
     ...(typeof body.maxDepth === "number" ? { maxDepth: body.maxDepth } : {}),
     ...(typeof body.maxPages === "number" ? { maxPages: body.maxPages } : {}),
     ...(techniques ? { techniques } : {}),
     ...(auth ? { auth } : {}),
+    ...(setupActions ? { setupActions } : {}),
   })
     .then((result) => {
       if (!result.ok) {
