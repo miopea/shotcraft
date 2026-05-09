@@ -1046,52 +1046,70 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       .catch(() => undefined);
     engineLog("auth.form.fonts-ready", await pageSnapshot(page));
 
-    // Detect silent auth failure: if we're still on the login URL AND
-    // there's still a *visible* password field, the submit didn't
-    // succeed. We check visibility (not just DOM presence) because
-    // SPAs sometimes leave the login form mounted but hidden after
-    // auth completes — the user is on the dashboard but a hidden
-    // password node is still in the DOM tree.
-    const afterUrl = page.url();
-    const stillOnLogin =
-      afterUrl === formUrl ||
-      new URL(afterUrl).pathname === new URL(formUrl).pathname ||
-      /[/?]login/i.test(afterUrl);
-    if (stillOnLogin) {
-      // `.first().isVisible()` returns false for elements with
-      // offsetParent === null (display:none, hidden ancestor, etc.) —
-      // matches our wait condition above.
-      const hasVisiblePassword = await page
+    // Stability check — the BudgetBug failure mode was: page briefly
+    // renders dashboard at /, then frontend's /api/auth/me check
+    // rejects the cookie and redirects back to /login, all within
+    // 1-2 seconds. The previous "still on login + visible password"
+    // check missed this because Loading states have no visible
+    // password field. Now we poll for STABLE non-login state for up
+    // to 10 seconds.
+    const isLoginUrl = (url: string): boolean => {
+      try {
+        if (url === formUrl) return true;
+        if (new URL(url).pathname === new URL(formUrl).pathname) return true;
+      } catch {
+        /* ignore */
+      }
+      return /[/?]login|signin|sign-in/i.test(url);
+    };
+    const STABILITY_DEADLINE = Date.now() + 10_000;
+    let lastUrl = page.url();
+    let lastPasswordVisible = false;
+    while (Date.now() < STABILITY_DEADLINE) {
+      lastUrl = page.url();
+      lastPasswordVisible = await page
         .locator('input[type="password"]')
         .first()
         .isVisible()
         .catch(() => false);
-      if (hasVisiblePassword) {
-        // Scrape visible error text from the page so the user sees
-        // exactly what the login form is complaining about: "Invalid
-        // email or password", "Account locked", etc.
-        const visibleError = await scrapeVisibleAuthError(page);
-        // Diagnostic dump: page title + visible buttons + inputs.
-        const diagnostic = await scrapeLoginDiagnostic(page);
-        // Screenshot of the failed-login page state — the user can
-        // see CAPTCHA modals / off-DOM error toasts / Cloudflare
-        // challenges that the DOM scrape missed.
-        const screenshot = await page
-          .screenshot({ fullPage: false, type: "png" })
-          .then((buf) => buf.toString("base64"))
-          .catch(() => undefined);
-        const errLine = visibleError ? `Page shows: "${visibleError}". ` : ``;
-        throw new AuthFailureError(
-          `auth (form): submitted login but page is still on ${new URL(afterUrl).pathname} ` +
-            `with a password field present. ${errLine}\n\n${diagnostic}\n\n` +
-            `If the submit button text says "Please wait..." or similar loading state, the ` +
-            `auth POST is failing silently — likely cause: bot/captcha detection, server-side ` +
-            `error, or the form needs a CSRF token. See the screenshot for what the page ` +
-            `actually looks like. Workaround: switch auth mode to "session" and paste cookies ` +
-            `from a manual browser login.`,
-          screenshot,
-        );
-      }
+      // If we have a visible password field anywhere, we're definitely
+      // not authenticated — break out and throw below.
+      if (lastPasswordVisible) break;
+      // If we're on a non-login URL, we're authenticated. Done.
+      if (!isLoginUrl(lastUrl)) break;
+      // Still on /login with no visible password — likely a transient
+      // "Loading..." state. Wait and re-check.
+      await page.waitForTimeout(1_000);
+    }
+    engineLog("auth.form.stability-check", {
+      finalUrl: lastUrl,
+      passwordVisible: lastPasswordVisible,
+      onLoginUrl: isLoginUrl(lastUrl),
+      ...(await pageSnapshot(page)),
+    });
+
+    if (lastPasswordVisible || isLoginUrl(lastUrl)) {
+      // Auth didn't stick. Scrape diagnostics and throw.
+      const visibleError = await scrapeVisibleAuthError(page);
+      const diagnostic = await scrapeLoginDiagnostic(page);
+      const screenshot = await page
+        .screenshot({ fullPage: false, type: "png" })
+        .then((buf) => buf.toString("base64"))
+        .catch(() => undefined);
+      const errLine = visibleError ? `Page shows: "${visibleError}". ` : ``;
+      const reason = lastPasswordVisible
+        ? `with a password field present. ${errLine}` +
+          `Likely cause: credentials wrong, or the submit button selector didn't fire the form.`
+        : `with no visible password field but stuck on the login URL. ${errLine}` +
+          `Likely cause: the app's frontend rejected the session after a brief auth — common ` +
+          `if /api/auth/me re-checks the cookie and finds it invalid. Try increasing waitForUrl ` +
+          `or switching to session-cookie auth.`;
+      throw new AuthFailureError(
+        `auth (form): page is on ${new URL(lastUrl).pathname} after a 10s stability ` +
+          `check ${reason}\n\n${diagnostic}\n\n` +
+          `Workaround: switch auth mode to "session" and paste cookies from a manual browser login.`,
+        screenshot,
+      );
     }
     return;
   }
