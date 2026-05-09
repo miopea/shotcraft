@@ -208,6 +208,17 @@ interface PersistedSession {
   renderTemplateIds?: string[];
 }
 
+/**
+ * Merge a (possibly partial / older-shape) persisted auth object
+ * with DEFAULT_AUTH so newly-added fields (like `setupActionsJson`)
+ * have safe defaults. Without this, `auth.setupActionsJson.trim()`
+ * throws on sessions that pre-date the field.
+ */
+function mergeAuth(loaded: AuthState | undefined): AuthState {
+  if (!loaded || typeof loaded !== "object") return DEFAULT_AUTH;
+  return { ...DEFAULT_AUTH, ...loaded };
+}
+
 function loadPersisted(): Partial<PersistedSession> {
   try {
     const raw = localStorage.getItem(PERSIST_KEY);
@@ -246,7 +257,7 @@ export function Crawler() {
     }
     return new Set([cellKey("readme-hero", "dark")]);
   });
-  const [auth, setAuth] = useState<AuthState>(initial.auth ?? DEFAULT_AUTH);
+  const [auth, setAuth] = useState<AuthState>(mergeAuth(initial.auth));
 
   // Captures + composites keyed by mediaKey(screenId, templateId, theme).
   const [captures, setCaptures] = useState<Record<string, ScreenCapture>>({});
@@ -407,7 +418,7 @@ export function Crawler() {
     if (typeof s.target === "string") setTarget(s.target);
     if (Array.isArray(s.screens)) setScreens(s.screens);
     if (Array.isArray(s.matrix)) setMatrix(new Set(s.matrix));
-    if (s.auth) setAuth(s.auth);
+    if (s.auth) setAuth(mergeAuth(s.auth));
     if (s.techniques) setTechniques(s.techniques);
   };
 
