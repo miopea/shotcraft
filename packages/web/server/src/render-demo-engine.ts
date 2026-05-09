@@ -820,6 +820,21 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
     // to mid-sample BudgetBug's transition and false-flag failure.
     await page.waitForTimeout(2_000);
 
+    // After auth is verified done (password gone OR URL changed), wait
+    // for the post-auth dashboard's content fetches to settle. Real
+    // SPAs do auth → render shell ("Loading...") → fetch dashboard
+    // data → render content. Without this wait, downstream techniques
+    // (link-crawl, nav-click) run against the "Loading..." shell and
+    // find no real nav.
+    //
+    // Different from the earlier networkidle-in-the-race attempt —
+    // that fired during auth itself and was unreliable. Placed AFTER
+    // auth-done, networkidle reliably catches the dashboard data-load.
+    await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
+    // Final small settle for chart/animation renders that may follow
+    // the data fetch.
+    await page.waitForTimeout(500);
+
     // Detect silent auth failure: if we're still on the login URL AND
     // there's still a *visible* password field, the submit didn't
     // succeed. We check visibility (not just DOM presence) because
