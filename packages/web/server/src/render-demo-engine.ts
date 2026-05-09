@@ -727,13 +727,43 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       auth.password,
       PASSWORD_FALLBACK_SELECTORS,
     );
-    const wait = auth.waitForUrl
-      ? page.waitForURL(auth.waitForUrl, { timeout: 15_000 })
-      : auth.waitForSelector
-        ? page.waitForSelector(auth.waitForSelector, { timeout: 15_000 })
-        : page.waitForLoadState("networkidle", { timeout: 15_000 });
     await clickFirstMatch(page, "submit", auth.submitButton, SUBMIT_FALLBACK_SELECTORS);
-    await wait;
+
+    // Wait for the auth flow to actually finish, not just for the
+    // network to briefly idle. We race several success signals:
+    //   1. URL changes away from the login URL (most apps redirect)
+    //   2. Password field disappears (post-login UI replaced the form)
+    //   3. User-supplied waitForUrl glob matches
+    //   4. User-supplied waitForSelector matches
+    //   5. networkidle (last resort, for apps that stay on the same URL)
+    // First signal wins. If none fire within 30s, we proceed and the
+    // post-submit "still on login?" check below will surface the
+    // failure with a diagnostic dump.
+    const beforeUrl = page.url();
+    const AUTH_WAIT_MS = 30_000;
+    const waiters: Promise<unknown>[] = [
+      page
+        .waitForURL((u) => u.toString() !== beforeUrl, { timeout: AUTH_WAIT_MS })
+        .catch(() => null),
+      page
+        .waitForFunction("document.querySelector('input[type=password]') === null", {
+          timeout: AUTH_WAIT_MS,
+        })
+        .catch(() => null),
+      page.waitForLoadState("networkidle", { timeout: AUTH_WAIT_MS }).catch(() => null),
+    ];
+    if (auth.waitForUrl) {
+      waiters.push(page.waitForURL(auth.waitForUrl, { timeout: AUTH_WAIT_MS }).catch(() => null));
+    }
+    if (auth.waitForSelector) {
+      waiters.push(
+        page.waitForSelector(auth.waitForSelector, { timeout: AUTH_WAIT_MS }).catch(() => null),
+      );
+    }
+    await Promise.race(waiters);
+    // Give async client-side navigation a beat to settle before we
+    // check whether we're "still on login" below.
+    await page.waitForTimeout(500);
 
     // Detect silent auth failure: if we're still on the login URL OR
     // there's still a password field on the page, the submit didn't
