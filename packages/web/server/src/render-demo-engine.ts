@@ -222,13 +222,36 @@ async function waitForPageReady(
   const timeoutMs = opts.timeoutMs ?? 8_000;
   const settleMs = opts.settleMs ?? 300;
   await Promise.race([
-    page
-      .waitForLoadState("networkidle", { timeout: timeoutMs })
-      .then(() => "networkidle")
-      .catch(() => null),
+    // networkidle alone isn't enough — we ALSO need the page to not
+    // be in a placeholder state. Compose: networkidle + body has
+    // real content (not just "Loading...").
+    (async () => {
+      await page.waitForLoadState("networkidle", { timeout: timeoutMs });
+      // After networkidle, briefly verify body has real content. If
+      // we're still on a Loading shell, return null so the heuristic
+      // path can win instead.
+      const looksReal = await page
+        .evaluate(
+          `(() => {
+          const t = (document.body?.innerText || '').trim();
+          // "Loading..." alone is ~10 chars. Real pages have way more.
+          if (t.length < 30) return false;
+          // Body that's JUST "Loading..." (sometimes with whitespace).
+          if (/^loading[\\s.…]*$/i.test(t)) return false;
+          return true;
+        })()`,
+        )
+        .catch(() => false);
+      return looksReal ? "networkidle" : null;
+    })().catch(() => null),
     page
       .waitForFunction(
         `(() => {
+          const t = (document.body?.innerText || '').trim();
+          // Reject placeholder states.
+          if (t.length < 30) return false;
+          if (/^loading[\\s.…]*$/i.test(t)) return false;
+          // Now check for interactive content.
           const visibleButtons = Array.from(document.querySelectorAll('button'))
             .filter((b) => b.offsetParent !== null).length;
           const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
