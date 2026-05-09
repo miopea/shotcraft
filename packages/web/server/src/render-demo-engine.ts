@@ -194,6 +194,61 @@ function putCachedAuthState(auth: RenderDemoAuth, targetUrl: string, state: Stor
   authStateCache.set(key, { state, expiresAt: Date.now() + AUTH_STATE_TTL_MS });
 }
 
+/**
+ * Wait for a page to actually finish loading content — not just for
+ * the DOM to parse. Race three signals:
+ *
+ *   1. networkidle (timeout configurable) — for normal SPAs that
+ *      quiesce after their data fetches.
+ *   2. Content heuristic — fires when visible buttons + anchors > 8
+ *      OR a populated nav/sidebar (>2 children) is on the page.
+ *      Catches apps where networkidle never settles (websockets,
+ *      polling, analytics).
+ *   3. Hard ceiling timeout — bound the wait so a stalled page
+ *     doesn't blow the discover/capture budget.
+ *
+ * First-to-fire wins. Plus a small post-race settle for any chart /
+ * animation / font-swap renders. Then awaits document.fonts.ready
+ * so screenshots taken right after this don't ship with the
+ * monospace fallback.
+ *
+ * Used everywhere we navigate the page mid-discover (link-crawl,
+ * nav-click, post-auth content load, capture).
+ */
+async function waitForPageReady(
+  page: Page,
+  opts: { timeoutMs?: number; settleMs?: number } = {},
+): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 8_000;
+  const settleMs = opts.settleMs ?? 300;
+  await Promise.race([
+    page
+      .waitForLoadState("networkidle", { timeout: timeoutMs })
+      .then(() => "networkidle")
+      .catch(() => null),
+    page
+      .waitForFunction(
+        `(() => {
+          const visibleButtons = Array.from(document.querySelectorAll('button'))
+            .filter((b) => b.offsetParent !== null).length;
+          const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
+            .filter((a) => a.offsetParent !== null).length;
+          if (visibleButtons + visibleAnchors > 8) return true;
+          const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar, [class*="sidebar" i]');
+          if (nav && nav.offsetParent !== null && nav.querySelectorAll('a, button, [role="link"]').length > 2) return true;
+          return false;
+        })()`,
+        { timeout: timeoutMs },
+      )
+      .then(() => "content-heuristic")
+      .catch(() => null),
+  ]);
+  await page.waitForTimeout(settleMs);
+  await page
+    .evaluate(`document.fonts ? document.fonts.ready : Promise.resolve()`)
+    .catch(() => undefined);
+}
+
 /** Snapshot the page's current state for diagnostic logging. */
 async function pageSnapshot(page: Page): Promise<Record<string, unknown>> {
   try {
@@ -572,7 +627,12 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
       } else if (args.auth && cachedState) {
         engineLog("capture.auth.cache-hit");
       }
-      await page.goto(args.url, { waitUntil: "networkidle", timeout: 25_000 });
+      await page.goto(args.url, { waitUntil: "domcontentloaded", timeout: 25_000 });
+      // Wait for content to actually render. networkidle in waitUntil
+      // is unreliable on SPAs with continuous activity and can hang
+      // indefinitely; the helper races networkidle against a content
+      // heuristic and a hard timeout, then awaits document.fonts.ready.
+      await waitForPageReady(page, { timeoutMs: 12_000, settleMs: 400 });
       // Run setup actions first (dismiss tour modal, accept cookie
       // banner, etc.) — these apply to every screen because each
       // capture uses a fresh browser context with empty localStorage.
@@ -592,13 +652,10 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
         await runActions(page, args.actions);
       }
       await page.waitForTimeout(args.waitMs ?? 1200);
-      // Wait for web fonts to finish loading. Without this, captures
-      // ship with the monospace fallback in place of the brand font —
-      // composites then show ugly Courier-style text inside device
-      // frames.
-      await page
-        .evaluate(`document.fonts ? document.fonts.ready : Promise.resolve()`)
-        .catch(() => undefined);
+      // Final settle right before the shutter — handles late chart
+      // animations, font swaps, image loads. Same waitForPageReady
+      // helper bounded to 5s so we don't tax slow targets.
+      await waitForPageReady(page, { timeoutMs: 5_000, settleMs: 200 });
       await page.screenshot({ path: rawPath, fullPage: false });
     } finally {
       await ctx.close();
@@ -2058,6 +2115,10 @@ async function discoverViaLinks(
         waitUntil: "domcontentloaded",
         timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
       });
+      // Wait for the page to actually render content before extracting
+      // links. Without this, we'd extract <a href>s from a "Loading..."
+      // shell and miss the real nav.
+      await waitForPageReady(page, { timeoutMs: 6_000, settleMs: 200 });
     } catch {
       continue;
     }
@@ -2148,6 +2209,9 @@ async function discoverViaNavClick(
     const label = labelRaw;
     try {
       await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 8_000 });
+      // Reset to a fully-rendered start state — we can't click a nav
+      // button that hasn't rendered yet.
+      await waitForPageReady(page, { timeoutMs: 6_000, settleMs: 200 });
     } catch {
       break; // origin offline mid-discover
     }
