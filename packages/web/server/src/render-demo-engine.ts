@@ -1712,20 +1712,59 @@ async function discoverWithBrowser(
       engineLog("discover.auth-done", { discoverStart, postAuth });
     }
 
-    // Make sure the page is on discoverStart for downstream fetches
-    // (page.evaluate fetches resolve relative to the current URL).
-    if (page.url() !== discoverStart) {
+    // Make sure the page is on discoverStart for downstream fetches.
+    // Compare via normalized URLs — string equality fails on harmless
+    // differences like trailing slash ("https://x.com" !==
+    // "https://x.com/") and would trigger a costly re-navigation that
+    // unloads the just-rendered dashboard. Only re-navigate if we're
+    // genuinely on a different path.
+    const currentUrlNorm = normalizeUrl(page.url());
+    const targetUrlNorm = normalizeUrl(discoverStart);
+    if (currentUrlNorm !== targetUrlNorm) {
+      engineLog("discover.start-url-needs-nav", {
+        from: page.url(),
+        to: discoverStart,
+        currentNorm: currentUrlNorm,
+        targetNorm: targetUrlNorm,
+      });
       try {
         await page.goto(discoverStart, {
           waitUntil: "domcontentloaded",
           timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
         });
+        // After navigation the page is "Loading..." — wait for content
+        // to render before running techniques. Same shape as the post-
+        // auth content-signal race.
+        await Promise.race([
+          page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => null),
+          page
+            .waitForFunction(
+              `(() => {
+                const visibleButtons = Array.from(document.querySelectorAll('button'))
+                  .filter((b) => b.offsetParent !== null).length;
+                const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
+                  .filter((a) => a.offsetParent !== null).length;
+                if (visibleButtons + visibleAnchors > 8) return true;
+                const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar');
+                if (nav && nav.offsetParent !== null && nav.querySelectorAll('a, button, [role="link"]').length > 2) return true;
+                return false;
+              })()`,
+              { timeout: 15_000 },
+            )
+            .catch(() => null),
+        ]);
+        await page.waitForTimeout(500);
       } catch {
         // Even if the initial nav fails we let the techniques try; sitemap
         // + common-routes fetches still work as long as the origin is
         // reachable.
       }
       engineLog("discover.start-url-loaded", await pageSnapshot(page));
+    } else {
+      engineLog("discover.start-url-already-here", {
+        url: page.url(),
+        norm: currentUrlNorm,
+      });
     }
 
     // Run user-supplied post-auth setup actions (dismiss tour modal,
