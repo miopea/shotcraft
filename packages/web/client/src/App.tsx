@@ -63,6 +63,11 @@ export function App() {
         <a href="https://github.com/miopea/shotcraft" target="_blank" rel="noreferrer">
           GitHub
         </a>
+        <div className="footer-version" title={`Built ${__SHOTCRAFT_BUILD_TIME__}`}>
+          <code>
+            v{__SHOTCRAFT_VERSION__} <span className="footer-sha">{__SHOTCRAFT_GIT_SHA__}</span>
+          </code>
+        </div>
       </footer>
     </div>
   );

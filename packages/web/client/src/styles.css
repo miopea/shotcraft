@@ -1339,3 +1339,20 @@ label {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+
+.footer-version {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.footer-version code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  background: transparent;
+  padding: 0;
+}
+
+.footer-sha {
+  opacity: 0.7;
+}
