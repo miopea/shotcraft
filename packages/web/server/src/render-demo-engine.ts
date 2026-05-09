@@ -755,14 +755,17 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
         // email or password", "Account locked", etc. Far more
         // actionable than "credentials likely rejected".
         const visibleError = await scrapeVisibleAuthError(page);
-        const detail = visibleError
-          ? `Page shows: "${visibleError}". `
-          : `No visible error text found on the page. `;
+        // Diagnostic dump: page title + visible buttons inside the
+        // login form. Lets the user see what we actually hit so they
+        // can override the submit selector.
+        const diagnostic = await scrapeLoginDiagnostic(page);
+        const errLine = visibleError ? `Page shows: "${visibleError}". ` : ``;
         throw new Error(
           `auth (form): submitted login but page is still on ${new URL(afterUrl).pathname} ` +
-            `with a password field present. ${detail}` +
-            `Likely cause: credentials wrong, or the submit button selector didn't fire the form. ` +
-            `Check email/password values + the "submit button" selector in Step 1.`,
+            `with a password field present. ${errLine}\n\n${diagnostic}\n\n` +
+            `Most common cause: we clicked the wrong button. Override "submit button" in ` +
+            `Step 1 with a more specific selector — e.g. ` +
+            `\`button:has-text("Sign in"):not(:has-text("Google"))\`.`,
         );
       }
     }
@@ -840,6 +843,96 @@ const SUBMIT_FALLBACK_SELECTORS: ReadonlyArray<string> = [
  * patterns (role=alert, [aria-live], common Tailwind/Bootstrap error
  * classes). Returns the first non-empty match, capped to 200 chars.
  */
+/**
+ * Diagnostic dump for failed form auth. Returns a multi-line string
+ * with: page title, current URL, all visible buttons + their labels,
+ * any input fields (so the user can see if there's a hidden CAPTCHA
+ * or a 2FA prompt). Helps the user pick the right submit selector
+ * without having to inspect the live page in DevTools.
+ */
+export async function scrapeLoginDiagnostic(page: Page): Promise<string> {
+  const result: unknown = await page
+    .evaluate(
+      `
+      (() => {
+        const out = {
+          title: document.title,
+          url: location.href,
+          buttons: [],
+          inputs: [],
+        };
+        const seenBtnText = new Set();
+        for (const b of document.querySelectorAll('button, input[type=submit]')) {
+          if (b.offsetParent === null) continue;
+          const t = (b.textContent || b.value || '').trim();
+          if (!t || t.length > 80) continue;
+          if (seenBtnText.has(t)) continue;
+          seenBtnText.add(t);
+          out.buttons.push({
+            text: t,
+            type: b.getAttribute('type') || 'button',
+            id: b.id || null,
+            testid: b.getAttribute('data-testid') || null,
+            classes: b.className.toString().slice(0, 80) || null,
+          });
+          if (out.buttons.length >= 8) break;
+        }
+        for (const i of document.querySelectorAll('input')) {
+          if (i.offsetParent === null) continue;
+          const t = i.getAttribute('type') || 'text';
+          if (t === 'hidden') continue;
+          out.inputs.push({
+            type: t,
+            name: i.getAttribute('name') || null,
+            placeholder: i.getAttribute('placeholder') || null,
+            id: i.id || null,
+          });
+          if (out.inputs.length >= 6) break;
+        }
+        return out;
+      })()
+    `,
+    )
+    .catch(() => null);
+
+  if (!result || typeof result !== "object") {
+    return "Could not extract page diagnostic.";
+  }
+  const r = result as {
+    title?: unknown;
+    url?: unknown;
+    buttons?: unknown;
+    inputs?: unknown;
+  };
+  const lines: string[] = [];
+  if (typeof r.title === "string") lines.push(`Page title: "${r.title}"`);
+  if (typeof r.url === "string") lines.push(`Current URL: ${r.url}`);
+  if (Array.isArray(r.buttons) && r.buttons.length > 0) {
+    lines.push(`Visible buttons (${r.buttons.length}):`);
+    for (const b of r.buttons) {
+      if (!b || typeof b !== "object") continue;
+      const obj = b as Record<string, unknown>;
+      const sel: string[] = [];
+      if (typeof obj.testid === "string") sel.push(`[data-testid="${obj.testid}"]`);
+      if (typeof obj.id === "string" && obj.id.length > 0) sel.push(`#${obj.id}`);
+      if (typeof obj.text === "string")
+        sel.push(`button:has-text("${obj.text.replace(/"/g, '\\"')}")`);
+      lines.push(`  • "${String(obj.text)}" (type=${String(obj.type)}) → ${sel.join(" or ")}`);
+    }
+  }
+  if (Array.isArray(r.inputs) && r.inputs.length > 0) {
+    lines.push(`Visible inputs:`);
+    for (const i of r.inputs) {
+      if (!i || typeof i !== "object") continue;
+      const obj = i as Record<string, unknown>;
+      lines.push(
+        `  • type=${String(obj.type)}, name=${String(obj.name)}, placeholder=${String(obj.placeholder)}`,
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
 export async function scrapeVisibleAuthError(page: Page): Promise<string | null> {
   const result: unknown = await page
     .evaluate(

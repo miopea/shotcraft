@@ -156,9 +156,10 @@ function rid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-const DEFAULT_SCREENS: ReadonlyArray<ScreenInput> = [
-  { id: rid(), route: "/", name: "01-home", caption: "Welcome", subtitle: "", actions: [] },
-];
+// Start empty — Discover routes or "+ Add screen" populates the list.
+// No placeholder screen so a fresh "Forget saved" doesn't leave junk
+// behind and discovered results aren't muddled by a leftover "/" entry.
+const DEFAULT_SCREENS: ReadonlyArray<ScreenInput> = [];
 
 /**
  * Persisted session — what we keep in localStorage so reopening the
@@ -210,7 +211,7 @@ export function Crawler() {
 
   const [target, setTarget] = useState(initial.target ?? "https://shotcraft.bfgsolutions.net");
   const [screens, setScreens] = useState<ScreenInput[]>(
-    initial.screens && initial.screens.length > 0 ? initial.screens : DEFAULT_SCREENS.slice(),
+    Array.isArray(initial.screens) ? initial.screens : DEFAULT_SCREENS.slice(),
   );
   const [matrix, setMatrix] = useState<Set<string>>(() => {
     if (Array.isArray(initial.matrix) && initial.matrix.length > 0) {
@@ -384,7 +385,7 @@ export function Crawler() {
   const applyPersisted = (s: Partial<PersistedSession>): void => {
     if (typeof s.token === "string") setToken(s.token);
     if (typeof s.target === "string") setTarget(s.target);
-    if (Array.isArray(s.screens) && s.screens.length > 0) setScreens(s.screens);
+    if (Array.isArray(s.screens)) setScreens(s.screens);
     if (Array.isArray(s.matrix)) setMatrix(new Set(s.matrix));
     if (s.auth) setAuth(s.auth);
     if (s.techniques) setTechniques(s.techniques);
