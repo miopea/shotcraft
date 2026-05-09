@@ -1041,10 +1041,43 @@ label {
   border-color: var(--danger, #d97757);
   color: var(--danger, #d97757);
   font-size: 0.9rem;
+}
+
+.discover-panel-error-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.discover-panel-error-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.discover-error-screenshot {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.discover-error-screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 480px;
+  object-fit: contain;
+  background: #000;
+}
+
+.discover-error-screenshot figcaption {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.4rem 0.6rem;
+  border-top: 1px solid var(--border);
 }
 
 .discover-panel-hint {

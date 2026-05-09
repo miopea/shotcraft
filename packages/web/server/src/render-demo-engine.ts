@@ -207,7 +207,24 @@ export interface ComposeScreenRequest {
   theme?: "dark" | "light";
 }
 
-export type EngineResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
+export type EngineResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; status: number; error: string; errorScreenshot?: string };
+
+/**
+ * Thrown by `runTargetAuth` when login submitted but the page is
+ * still on the login screen. Carries a base64 screenshot of what
+ * the page looks like at failure time so the user can SEE what the
+ * engine couldn't get past (CAPTCHA, error toast, 2FA prompt, etc.).
+ */
+export class AuthFailureError extends Error {
+  screenshotBase64?: string;
+  constructor(message: string, screenshotBase64?: string) {
+    super(message);
+    this.name = "AuthFailureError";
+    if (screenshotBase64) this.screenshotBase64 = screenshotBase64;
+  }
+}
 
 /**
  * Capture-only entry point. No template composition — returns the raw
@@ -246,10 +263,13 @@ export async function captureScreen(req: CaptureScreenRequest): Promise<EngineRe
     const value = await job;
     return { ok: true, value };
   } catch (err) {
+    const screenshot =
+      err instanceof AuthFailureError && err.screenshotBase64 ? err.screenshotBase64 : undefined;
     return {
       ok: false,
       status: 500,
       error: `capture failed: ${err instanceof Error ? err.message : String(err)}`,
+      ...(screenshot ? { errorScreenshot: screenshot } : {}),
     };
   }
 }
@@ -782,20 +802,27 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       if (hasPasswordField > 0) {
         // Scrape visible error text from the page so the user sees
         // exactly what the login form is complaining about: "Invalid
-        // email or password", "Account locked", etc. Far more
-        // actionable than "credentials likely rejected".
+        // email or password", "Account locked", etc.
         const visibleError = await scrapeVisibleAuthError(page);
-        // Diagnostic dump: page title + visible buttons inside the
-        // login form. Lets the user see what we actually hit so they
-        // can override the submit selector.
+        // Diagnostic dump: page title + visible buttons + inputs.
         const diagnostic = await scrapeLoginDiagnostic(page);
+        // Screenshot of the failed-login page state — the user can
+        // see CAPTCHA modals / off-DOM error toasts / Cloudflare
+        // challenges that the DOM scrape missed.
+        const screenshot = await page
+          .screenshot({ fullPage: false, type: "png" })
+          .then((buf) => buf.toString("base64"))
+          .catch(() => undefined);
         const errLine = visibleError ? `Page shows: "${visibleError}". ` : ``;
-        throw new Error(
+        throw new AuthFailureError(
           `auth (form): submitted login but page is still on ${new URL(afterUrl).pathname} ` +
             `with a password field present. ${errLine}\n\n${diagnostic}\n\n` +
-            `Most common cause: we clicked the wrong button. Override "submit button" in ` +
-            `Step 1 with a more specific selector — e.g. ` +
-            `\`button:has-text("Sign in"):not(:has-text("Google"))\`.`,
+            `If the submit button text says "Please wait..." or similar loading state, the ` +
+            `auth POST is failing silently — likely cause: bot/captcha detection, server-side ` +
+            `error, or the form needs a CSRF token. See the screenshot for what the page ` +
+            `actually looks like. Workaround: switch auth mode to "session" and paste cookies ` +
+            `from a manual browser login.`,
+          screenshot,
         );
       }
     }
@@ -1272,10 +1299,13 @@ export async function discoverRoutes(
     const value = await job;
     return { ok: true, value };
   } catch (err) {
+    const screenshot =
+      err instanceof AuthFailureError && err.screenshotBase64 ? err.screenshotBase64 : undefined;
     return {
       ok: false,
       status: 500,
       error: `discover failed: ${err instanceof Error ? err.message : String(err)}`,
+      ...(screenshot ? { errorScreenshot: screenshot } : {}),
     };
   }
 }

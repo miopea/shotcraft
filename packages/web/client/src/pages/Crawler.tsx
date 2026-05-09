@@ -149,7 +149,7 @@ const DEFAULT_TECHNIQUES: DiscoverTechniques = {
 type DiscoverState =
   | { status: "idle" }
   | { status: "running" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; errorScreenshot?: string }
   | { status: "ready"; routes: ReadonlyArray<DiscoveredRoute>; selected: Set<string> };
 
 function rid(): string {
@@ -443,8 +443,17 @@ export function Crawler() {
         }),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? `HTTP ${res.status}`);
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          errorScreenshot?: string;
+        };
+        const e = new Error(data.error ?? `HTTP ${res.status}`) as Error & {
+          errorScreenshot?: string;
+        };
+        if (typeof data.errorScreenshot === "string") {
+          e.errorScreenshot = data.errorScreenshot;
+        }
+        throw e;
       }
       const data = (await res.json()) as { routes: DiscoveredRoute[] };
       const existing = new Set(screens.map((s) => normalizeRoute(s.route)));
@@ -454,9 +463,14 @@ export function Crawler() {
       }
       setDiscoverState({ status: "ready", routes: data.routes, selected });
     } catch (err) {
+      const screenshot =
+        err instanceof Error && "errorScreenshot" in err && typeof err.errorScreenshot === "string"
+          ? err.errorScreenshot
+          : undefined;
       setDiscoverState({
         status: "error",
         message: err instanceof Error ? err.message : String(err),
+        ...(screenshot ? { errorScreenshot: screenshot } : {}),
       });
     }
   };
@@ -1661,10 +1675,29 @@ function DiscoverPanel({
   if (state.status === "error") {
     return (
       <div className="discover-panel discover-panel-error" role="alert">
-        <strong>Discover failed:</strong> {state.message}
-        <button type="button" className="discover-dismiss" onClick={onDismiss} aria-label="Dismiss">
-          ✕
-        </button>
+        <header className="discover-panel-error-header">
+          <div>
+            <strong>Discover failed:</strong>{" "}
+            <span style={{ whiteSpace: "pre-wrap" }}>{state.message}</span>
+          </div>
+          <button
+            type="button"
+            className="discover-dismiss"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </header>
+        {state.errorScreenshot && (
+          <figure className="discover-error-screenshot">
+            <img
+              src={`data:image/png;base64,${state.errorScreenshot}`}
+              alt="Page state at the moment auth failed"
+            />
+            <figcaption>Page state at failure (live screenshot from the engine).</figcaption>
+          </figure>
+        )}
       </div>
     );
   }

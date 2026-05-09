@@ -81,7 +81,10 @@ captureRouter.post("/", (req, res) => {
   })
     .then((result) => {
       if (!result.ok) {
-        res.status(result.status).json({ error: result.error });
+        res.status(result.status).json({
+          error: result.error,
+          ...(result.errorScreenshot ? { errorScreenshot: result.errorScreenshot } : {}),
+        });
         return;
       }
       res.set("Content-Type", "image/png");
