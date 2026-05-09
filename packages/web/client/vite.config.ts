@@ -27,13 +27,27 @@ function gitShortSha(): string {
   }
 }
 
+/**
+ * ISO-8601 committer date of HEAD. Deterministic per commit (unlike
+ * `new Date()` at build time) so bundle content-hashes match between
+ * local builds and CI builds — keeps the bundle-hash verification
+ * documented in `.claude/commands/deploy.md` honest.
+ */
+function gitCommitTime(): string {
+  try {
+    return execSync("git log -1 --format=%cI", { encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 export default defineConfig({
   root: resolve(import.meta.dirname),
   plugins: [react()],
   define: {
     __SHOTCRAFT_VERSION__: JSON.stringify(pkg.version),
     __SHOTCRAFT_GIT_SHA__: JSON.stringify(gitShortSha()),
-    __SHOTCRAFT_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __SHOTCRAFT_BUILD_TIME__: JSON.stringify(gitCommitTime()),
   },
   build: {
     outDir: resolve(import.meta.dirname, "../dist/client"),
