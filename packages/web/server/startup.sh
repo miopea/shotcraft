@@ -13,9 +13,10 @@ set -e
 
 NEEDED_LIB="/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0"
 INTER_FONT="/usr/share/fonts/truetype/inter/Inter-Regular.otf"
+FC_ALIASES="/etc/fonts/conf.d/99-shotcraft-aliases.conf"
 
-if [ -f "$NEEDED_LIB" ] && [ -f "$INTER_FONT" ]; then
-  echo "[startup] Chromium system deps + fonts already installed."
+if [ -f "$NEEDED_LIB" ] && [ -f "$INTER_FONT" ] && [ -f "$FC_ALIASES" ]; then
+  echo "[startup] Chromium system deps + fonts + fontconfig aliases already installed."
 else
   echo "[startup] Installing Chromium system dependencies + UI fonts..."
   apt-get update -qq
@@ -53,10 +54,30 @@ else
     fonts-noto-core \
     fonts-noto-color-emoji \
     fontconfig
-  # Refresh Chromium's font cache so the new fonts are usable
-  # immediately without a process restart.
+  # Map Tailwind's abstract font-family names (`system-ui`,
+  # `ui-sans-serif`, `sans-serif`) to Inter so BudgetBug-style
+  # CSS resolves to a quality font on Linux. Without this, Linux
+  # fontconfig falls through to DejaVu / Liberation regardless of
+  # Inter being installed — those families have no implicit alias.
+  cat > /etc/fonts/conf.d/99-shotcraft-aliases.conf <<'CONF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <alias binding="strong"><family>system-ui</family><prefer><family>Inter</family><family>Roboto</family><family>Noto Sans</family></prefer></alias>
+  <alias binding="strong"><family>ui-sans-serif</family><prefer><family>Inter</family><family>Roboto</family><family>Noto Sans</family></prefer></alias>
+  <alias binding="strong"><family>-apple-system</family><prefer><family>Inter</family><family>Roboto</family><family>Noto Sans</family></prefer></alias>
+  <alias binding="strong"><family>BlinkMacSystemFont</family><prefer><family>Inter</family><family>Roboto</family><family>Noto Sans</family></prefer></alias>
+  <alias binding="strong"><family>SF Pro</family><prefer><family>Inter</family></prefer></alias>
+  <alias binding="strong"><family>SF Pro Display</family><prefer><family>Inter</family></prefer></alias>
+  <alias binding="strong"><family>SF Pro Text</family><prefer><family>Inter</family></prefer></alias>
+  <alias binding="strong"><family>-apple-system-body</family><prefer><family>Inter</family></prefer></alias>
+  <alias binding="weak"><family>sans-serif</family><prefer><family>Inter</family><family>Roboto</family><family>Noto Sans</family></prefer></alias>
+</fontconfig>
+CONF
+  # Refresh Chromium's font cache so the new fonts + aliases are
+  # usable immediately without a process restart.
   fc-cache -f >/dev/null 2>&1 || true
-  echo "[startup] System deps + fonts installed."
+  echo "[startup] System deps + fonts + fontconfig aliases installed."
 fi
 
 echo "[startup] Starting server..."
