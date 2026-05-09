@@ -108,6 +108,49 @@ const STEALTH_INIT_SCRIPT = `
   Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 `;
 
+/**
+ * Phase logger — prints structured `[shotcraft-engine][phase] data`
+ * lines to the App Service log stream so we can debug headless-vs-
+ * dev-machine differences without redeploying. Tail with:
+ *   az webapp log tail -g bfg-solutions -n shotcraft-web
+ *
+ * Each call includes elapsed-ms-since-engine-start so timing patterns
+ * are obvious at a glance (e.g. "auth-wait-race resolved at 1200ms"
+ * tells us BudgetBug auth completes fast on Azure too — the "Loading"
+ * issue is downstream).
+ */
+const ENGINE_START = Date.now();
+function engineLog(phase: string, data?: Record<string, unknown>): void {
+  const elapsed = Date.now() - ENGINE_START;
+  const payload = data ? ` ${JSON.stringify(data)}` : "";
+  process.stdout.write(`[shotcraft-engine][+${elapsed}ms][${phase}]${payload}\n`);
+}
+
+/** Snapshot the page's current state for diagnostic logging. */
+async function pageSnapshot(page: Page): Promise<Record<string, unknown>> {
+  try {
+    const data: unknown = await page.evaluate(`
+      (() => ({
+        url: location.href,
+        title: document.title,
+        readyState: document.readyState,
+        bodyText: (document.body?.innerText || '').slice(0, 80).replace(/\\n/g, ' '),
+        visibleButtons: Array.from(document.querySelectorAll('button')).filter(b => b.offsetParent !== null).length,
+        visibleAnchors: Array.from(document.querySelectorAll('a')).filter(a => a.offsetParent !== null).length,
+        navItems: (() => {
+          const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar');
+          if (!nav || nav.offsetParent === null) return 0;
+          return nav.querySelectorAll('a, button, [role="link"]').length;
+        })(),
+        passwordVisible: !!Array.from(document.querySelectorAll('input[type=password]')).find(p => p.offsetParent !== null),
+      }))()
+    `);
+    return (data ?? {}) as Record<string, unknown>;
+  } catch {
+    return { error: "snapshot failed" };
+  }
+}
+
 export interface RenderDemoRequest {
   url: string;
   caption: string;
@@ -798,10 +841,12 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
   }
 
   if (auth.type === "form") {
+    engineLog("auth.form.start", { origin });
     // Allow relative URLs like "/login" — resolve against the capture
     // origin so users don't have to type the full host twice.
     const formUrl = new URL(auth.url, origin).toString();
     await page.goto(formUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
+    engineLog("auth.form.login-page-loaded", await pageSnapshot(page));
     await fillFirstMatch(page, "email", auth.emailField, auth.email, EMAIL_FALLBACK_SELECTORS);
     await fillFirstMatch(
       page,
@@ -810,7 +855,9 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       auth.password,
       PASSWORD_FALLBACK_SELECTORS,
     );
+    engineLog("auth.form.fields-filled");
     await clickFirstMatch(page, "submit", auth.submitButton, SUBMIT_FALLBACK_SELECTORS);
+    engineLog("auth.form.submit-clicked");
 
     // Wait for the auth flow to actually finish. Race several signals
     // — first to resolve wins, then a settle period for SPA renders:
@@ -825,71 +872,92 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
     // is mid-transition, leading us to false-flag "still on login".
     const beforeUrl = page.url();
     const AUTH_WAIT_MS = 30_000;
-    const waiters: Promise<unknown>[] = [
+    const raceResolved = await Promise.race([
       page
         .waitForURL((u) => u.toString() !== beforeUrl, { timeout: AUTH_WAIT_MS })
+        .then(() => "url-change")
         .catch(() => null),
       page
         .waitForFunction(
-          // Password field hidden (display:none / removed from layout)
-          // OR fully removed from the DOM.
           `(() => {
             const el = document.querySelector('input[type=password]');
             return !el || el.offsetParent === null;
           })()`,
           { timeout: AUTH_WAIT_MS },
         )
+        .then(() => "password-hidden")
         .catch(() => null),
-    ];
-    if (auth.waitForUrl) {
-      waiters.push(page.waitForURL(auth.waitForUrl, { timeout: AUTH_WAIT_MS }).catch(() => null));
-    }
-    if (auth.waitForSelector) {
-      waiters.push(
-        page.waitForSelector(auth.waitForSelector, { timeout: AUTH_WAIT_MS }).catch(() => null),
-      );
-    }
-    await Promise.race(waiters);
+      ...(auth.waitForUrl
+        ? [
+            page
+              .waitForURL(auth.waitForUrl, { timeout: AUTH_WAIT_MS })
+              .then(() => "user-waitForUrl")
+              .catch(() => null),
+          ]
+        : []),
+      ...(auth.waitForSelector
+        ? [
+            page
+              .waitForSelector(auth.waitForSelector, { timeout: AUTH_WAIT_MS })
+              .then(() => "user-waitForSelector")
+              .catch(() => null),
+          ]
+        : []),
+    ]);
+    engineLog("auth.form.race-resolved", { signal: raceResolved });
     // 2-second settle: React state updates + portal renders + any
-    // post-auth modal mount need a real beat. 500ms was tight enough
-    // to mid-sample BudgetBug's transition and false-flag failure.
+    // post-auth modal mount need a real beat.
     await page.waitForTimeout(2_000);
+    engineLog("auth.form.post-race-settle", await pageSnapshot(page));
 
-    // After auth is verified done (password gone OR URL changed), wait
-    // for the post-auth dashboard to actually render content — not just
-    // a "Loading..." shell. Race two signals:
+    // After auth is verified done, wait for the dashboard to actually
+    // render content — not just a "Loading..." shell. Race signals:
     //
-    //   1. networkidle — fires for normal SPAs that finish their data
-    //      fetches after login.
-    //   2. Content heuristic — fires when the dashboard has rendered
-    //      enough interactive elements (>4 visible buttons OR a
-    //      populated nav). Catches apps where networkidle never
-    //      settles (websockets, polling, analytics).
-    //
-    // First-to-fire wins, then a small final settle. 15s ceiling per
-    // technique — a slow dashboard load shouldn't add more than that.
-    await Promise.race([
-      page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => null),
+    //   1. networkidle (15s) — for normal SPAs.
+    //   2. Content heuristic — fires when the post-auth UI has
+    //      rendered enough interactive elements. Counts BOTH buttons
+    //      AND anchors so React Router <Link>s (rendered as <a>)
+    //      count toward the threshold. The earlier version checked
+    //      buttons-only, which missed BudgetBug's anchor-based sidebar.
+    const contentSignal = await Promise.race([
+      page
+        .waitForLoadState("networkidle", { timeout: 15_000 })
+        .then(() => "networkidle")
+        .catch(() => null),
       page
         .waitForFunction(
           `(() => {
+            // Total interactive elements: buttons + anchors with href.
+            // Login pages have ~5 (signin, create, forgot, social...).
+            // Dashboards have many more.
             const visibleButtons = Array.from(document.querySelectorAll('button'))
-              .filter((b) => b.offsetParent !== null);
-            if (visibleButtons.length > 4) return true;
-            const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar');
-            if (nav && nav.offsetParent !== null) {
-              const navItems = nav.querySelectorAll('a, button, [role="link"]');
-              if (navItems.length > 2) return true;
-            }
+              .filter((b) => b.offsetParent !== null).length;
+            const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
+              .filter((a) => a.offsetParent !== null).length;
+            if (visibleButtons + visibleAnchors > 8) return true;
+            // Or: a populated nav-like container with > 2 children.
+            const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar, [class*="sidebar" i]');
+            if (nav && nav.offsetParent === null) return false;
+            if (nav && nav.querySelectorAll('a, button, [role="link"]').length > 2) return true;
             return false;
           })()`,
           { timeout: 15_000 },
         )
+        .then(() => "content-heuristic")
         .catch(() => null),
     ]);
-    // Final small settle for chart/animation renders that may follow
-    // the data fetch.
+    engineLog("auth.form.content-signal", {
+      signal: contentSignal,
+      ...(await pageSnapshot(page)),
+    });
+    // Final small settle for chart/animation renders.
     await page.waitForTimeout(500);
+    // Wait for web fonts to finish loading so screenshots don't ship
+    // with monospace fallback in place of the brand fonts.
+    await page
+      .evaluate(`document.fonts ? document.fonts.ready : Promise.resolve()`)
+      .catch(() => undefined);
+    engineLog("auth.form.fonts-ready", await pageSnapshot(page));
 
     // Detect silent auth failure: if we're still on the login URL AND
     // there's still a *visible* password field, the submit didn't
@@ -1501,6 +1569,7 @@ async function discoverWithBrowser(
   await ctx.addInitScript(STEALTH_INIT_SCRIPT);
   try {
     const page = await ctx.newPage();
+    engineLog("discover.context-ready", { startUrl: args.url, techniques: args.techniques });
 
     // After auth, the user typically lands on /dashboard or similar.
     // We use that as the discover start instead of the original target
@@ -1520,6 +1589,7 @@ async function discoverWithBrowser(
           // unparseable post-auth url — fall back to the user's target
         }
       }
+      engineLog("discover.auth-done", { discoverStart, postAuth });
     }
 
     // Make sure the page is on discoverStart for downstream fetches
@@ -1535,6 +1605,7 @@ async function discoverWithBrowser(
         // + common-routes fetches still work as long as the origin is
         // reachable.
       }
+      engineLog("discover.start-url-loaded", await pageSnapshot(page));
     }
 
     // Run user-supplied post-auth setup actions (dismiss tour modal,
@@ -1544,6 +1615,7 @@ async function discoverWithBrowser(
     if (args.setupActions && args.setupActions.length > 0) {
       try {
         await runActions(page, args.setupActions);
+        engineLog("discover.setup-actions-done", await pageSnapshot(page));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`setupActions: ${msg}`, { cause: err });
@@ -1569,8 +1641,10 @@ async function discoverWithBrowser(
     const perTechnique = { link: 0, sitemap: 0, common: 0, nav: 0 };
 
     if (args.techniques.sitemap) {
+      engineLog("discover.tech.sitemap.start");
       const found = await discoverViaSitemap(page, origin).catch(() => [] as DiscoveredRoute[]);
       perTechnique.sitemap = found.length;
+      engineLog("discover.tech.sitemap.done", { found: found.length });
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1578,11 +1652,13 @@ async function discoverWithBrowser(
     }
 
     if (args.techniques.commonRoutes && merged.size < args.maxPages) {
+      engineLog("discover.tech.common.start");
       const list = args.commonRouteList ?? COMMON_ROUTES;
       const found = await discoverViaCommonRoutes(page, origin, list).catch(
         () => [] as DiscoveredRoute[],
       );
       perTechnique.common = found.length;
+      engineLog("discover.tech.common.done", { found: found.length });
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1590,10 +1666,12 @@ async function discoverWithBrowser(
     }
 
     if (args.techniques.linkCrawl && merged.size < args.maxPages) {
+      engineLog("discover.tech.link.start", await pageSnapshot(page));
       const found = await discoverViaLinks(page, origin, techArgs).catch(
         () => [] as DiscoveredRoute[],
       );
       perTechnique.link = found.length;
+      engineLog("discover.tech.link.done", { found: found.length });
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
@@ -1601,24 +1679,31 @@ async function discoverWithBrowser(
     }
 
     if (args.techniques.navClick && merged.size < args.maxPages) {
+      engineLog("discover.tech.nav.start", await pageSnapshot(page));
       const found = await discoverViaNavClick(page, origin, discoverStart).catch(
         () => [] as DiscoveredRoute[],
       );
       perTechnique.nav = found.length;
+      engineLog("discover.tech.nav.done", { found: found.length });
       for (const r of found) {
         addRoute(r);
         if (merged.size >= args.maxPages) break;
       }
     }
 
+    // Wait for web fonts before final screenshot so the diagnostic
+    // image shows the brand fonts, not the monospace fallback.
+    await page
+      .evaluate(`document.fonts ? document.fonts.ready : Promise.resolve()`)
+      .catch(() => undefined);
+
     // Final-state screenshot — captures whatever the page settled on
-    // after all techniques ran. Lets the operator see what we were
-    // actually crawling (was auth applied? did we land on the
-    // dashboard? what does the post-auth UI look like?).
+    // after all techniques ran.
     const finalScreenshot = await page
       .screenshot({ fullPage: false, type: "png" })
       .then((buf) => buf.toString("base64"))
       .catch(() => undefined);
+    engineLog("discover.complete", { perTechnique, finalCount: merged.size });
 
     const routes = Array.from(merged.values()).sort((a, b) => a.path.localeCompare(b.path));
     return {
