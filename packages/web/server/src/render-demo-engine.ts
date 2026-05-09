@@ -749,16 +749,17 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
     );
     await clickFirstMatch(page, "submit", auth.submitButton, SUBMIT_FALLBACK_SELECTORS);
 
-    // Wait for the auth flow to actually finish, not just for the
-    // network to briefly idle. We race several success signals:
-    //   1. URL changes away from the login URL (most apps redirect)
-    //   2. Password field disappears (post-login UI replaced the form)
+    // Wait for the auth flow to actually finish. Race several signals
+    // — first to resolve wins, then a settle period for SPA renders:
+    //   1. URL changes away from the login URL (multi-page apps redirect)
+    //   2. Password field becomes hidden or removed from the DOM
     //   3. User-supplied waitForUrl glob matches
     //   4. User-supplied waitForSelector matches
-    //   5. networkidle (last resort, for apps that stay on the same URL)
-    // First signal wins. If none fire within 30s, we proceed and the
-    // post-submit "still on login?" check below will surface the
-    // failure with a diagnostic dump.
+    //
+    // `networkidle` deliberately NOT in the race: it's misleading for
+    // SPAs with active analytics/polling that transition without a URL
+    // change. networkidle can resolve during a brief lull while React
+    // is mid-transition, leading us to false-flag "still on login".
     const beforeUrl = page.url();
     const AUTH_WAIT_MS = 30_000;
     const waiters: Promise<unknown>[] = [
@@ -766,11 +767,16 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
         .waitForURL((u) => u.toString() !== beforeUrl, { timeout: AUTH_WAIT_MS })
         .catch(() => null),
       page
-        .waitForFunction("document.querySelector('input[type=password]') === null", {
-          timeout: AUTH_WAIT_MS,
-        })
+        .waitForFunction(
+          // Password field hidden (display:none / removed from layout)
+          // OR fully removed from the DOM.
+          `(() => {
+            const el = document.querySelector('input[type=password]');
+            return !el || el.offsetParent === null;
+          })()`,
+          { timeout: AUTH_WAIT_MS },
+        )
         .catch(() => null),
-      page.waitForLoadState("networkidle", { timeout: AUTH_WAIT_MS }).catch(() => null),
     ];
     if (auth.waitForUrl) {
       waiters.push(page.waitForURL(auth.waitForUrl, { timeout: AUTH_WAIT_MS }).catch(() => null));
@@ -781,25 +787,32 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       );
     }
     await Promise.race(waiters);
-    // Give async client-side navigation a beat to settle before we
-    // check whether we're "still on login" below.
-    await page.waitForTimeout(500);
+    // 2-second settle: React state updates + portal renders + any
+    // post-auth modal mount need a real beat. 500ms was tight enough
+    // to mid-sample BudgetBug's transition and false-flag failure.
+    await page.waitForTimeout(2_000);
 
-    // Detect silent auth failure: if we're still on the login URL OR
-    // there's still a password field on the page, the submit didn't
-    // succeed. Throwing here means the user sees a clear error
-    // instead of a confusing empty discover/capture result later.
+    // Detect silent auth failure: if we're still on the login URL AND
+    // there's still a *visible* password field, the submit didn't
+    // succeed. We check visibility (not just DOM presence) because
+    // SPAs sometimes leave the login form mounted but hidden after
+    // auth completes — the user is on the dashboard but a hidden
+    // password node is still in the DOM tree.
     const afterUrl = page.url();
     const stillOnLogin =
       afterUrl === formUrl ||
       new URL(afterUrl).pathname === new URL(formUrl).pathname ||
       /[/?]login/i.test(afterUrl);
     if (stillOnLogin) {
-      const hasPasswordField = await page
+      // `.first().isVisible()` returns false for elements with
+      // offsetParent === null (display:none, hidden ancestor, etc.) —
+      // matches our wait condition above.
+      const hasVisiblePassword = await page
         .locator('input[type="password"]')
-        .count()
-        .catch(() => 0);
-      if (hasPasswordField > 0) {
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (hasVisiblePassword) {
         // Scrape visible error text from the page so the user sees
         // exactly what the login form is complaining about: "Invalid
         // email or password", "Account locked", etc.
