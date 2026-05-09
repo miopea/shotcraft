@@ -592,6 +592,13 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
         await runActions(page, args.actions);
       }
       await page.waitForTimeout(args.waitMs ?? 1200);
+      // Wait for web fonts to finish loading. Without this, captures
+      // ship with the monospace fallback in place of the brand font —
+      // composites then show ugly Courier-style text inside device
+      // frames.
+      await page
+        .evaluate(`document.fonts ? document.fonts.ready : Promise.resolve()`)
+        .catch(() => undefined);
       await page.screenshot({ path: rawPath, fullPage: false });
     } finally {
       await ctx.close();
