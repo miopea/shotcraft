@@ -9,6 +9,7 @@ import {
   putBlob,
   mediaKey,
 } from "../persistence/idb.js";
+import { buildStoreZip } from "../persistence/zip.js";
 
 type AuthMode = "none" | "api" | "form" | "session";
 
@@ -284,6 +285,7 @@ export function Crawler() {
   const [composites, setComposites] = useState<Record<string, ScreenComposite>>({});
 
   const [renderingAll, setRenderingAll] = useState(false);
+  const [zipping, setZipping] = useState(false);
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [discoverState, setDiscoverState] = useState<DiscoverState>({ status: "idle" });
@@ -877,6 +879,46 @@ export function Crawler() {
     setAuth((s) => ({ ...s, [k]: v }));
   };
 
+  const downloadAllComposites = async () => {
+    if (zipping) return;
+    setZipping(true);
+    try {
+      const screenById = new Map(screens.map((s) => [s.id, s]));
+      const used = new Set<string>();
+      const entries = await Promise.all(
+        Object.values(composites).map(async (c) => {
+          const screen = screenById.get(c.inputId);
+          const base = `${screen?.name ?? "screen"}-${c.templateId}-${c.theme}.png`;
+          // Disambiguate if two screens happened to share a name.
+          let name = base;
+          let n = 2;
+          while (used.has(name)) {
+            name = base.replace(/\.png$/, `-${n}.png`);
+            n += 1;
+          }
+          used.add(name);
+          const res = await fetch(c.pngBlobUrl);
+          const buf = new Uint8Array(await res.arrayBuffer());
+          return { name, data: buf };
+        }),
+      );
+      const blob = buildStoreZip(entries);
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").replace(/T/, "_").slice(0, 19);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `shotcraft-composites-${stamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
+    } catch (err) {
+      setRenderError(`Download all failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setZipping(false);
+    }
+  };
+
   const captureCount = useMemo(() => Object.keys(captures).length, [captures]);
 
   return (
@@ -1305,7 +1347,26 @@ export function Crawler() {
       {/* ── Step 4: Composites ────────────────────────────────────────── */}
       {Object.keys(composites).length > 0 && (
         <section className="crawler-step">
-          <h2>4. Composites</h2>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <h2 style={{ margin: 0 }}>4. Composites</h2>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => void downloadAllComposites()}
+              disabled={zipping}
+              title={`Download all ${Object.keys(composites).length} composites as a single zip`}
+            >
+              {zipping ? "Zipping…" : `↓ Download all (${Object.keys(composites).length})`}
+            </button>
+          </div>
           <div className="gallery-grid">
             {Object.values(composites).map((c) => {
               const screen = screens.find((s) => s.id === c.inputId);
