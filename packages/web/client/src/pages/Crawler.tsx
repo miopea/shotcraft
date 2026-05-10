@@ -805,6 +805,15 @@ export function Crawler() {
 
     // Each capture in `captures` knows its own templateId + theme. One
     // capture → one composite, rendered through that same template.
+    //
+    // Filter to captures whose (templateId, theme) is in the CURRENT
+    // matrix. Stale captures from prior matrix configurations
+    // (e.g. user previously selected app-store-iphone, now selects
+    // play-store-phone only) live in IndexedDB forever — without this
+    // filter they'd still render into composites alongside the new
+    // ones, producing surprise iPhone-frame outputs when the user
+    // expected Pixel.
+    const activeCells = new Set(matrix);
     const targets: {
       screen: ScreenInput;
       capture: ScreenCapture;
@@ -817,6 +826,7 @@ export function Crawler() {
       if (!screen) continue;
       const tpl = templates.find((t) => t.id === cap.templateId);
       if (!tpl) continue;
+      if (!activeCells.has(cellKey(cap.templateId, cap.theme))) continue;
       targets.push({ screen, capture: cap, templateId: cap.templateId, theme: cap.theme });
     }
 
