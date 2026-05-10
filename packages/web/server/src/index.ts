@@ -21,7 +21,7 @@
 
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import express from "express";
 import { templatesRouter } from "./routes/templates.js";
@@ -32,55 +32,47 @@ import { discoverRouter } from "./routes/discover.js";
 import { localConfigRouter, LOCAL_CONFIG_PATH } from "./routes/local-config.js";
 
 /**
- * Install Inter + the fontconfig aliases at server startup. Was in
- * startup.sh, but Azure's appCommandLine wrapping made debugging the
- * shell script's behavior opaque (no [startup] echoes in docker.log).
- * Doing it from Node where we DO have stdout visibility.
+ * Set up fontconfig so Chromium can find Inter + alias `system-ui`
+ * etc. to it. Crucially: writes to USER-writable fontconfig paths
+ * (`~/.config/fontconfig/fonts.conf`), NOT /usr/share/fonts. Azure
+ * App Service runs Node as a non-root app user, so /usr/share/fonts
+ * writes fail with EACCES. The user's fontconfig is read by every
+ * fontconfig client (including Chromium child processes) since they
+ * inherit `$HOME` from the Node process.
  *
- * No-op when:
- *   - we're not on Linux (local Mac/Windows dev)
- *   - the bundled fonts aren't present (running outside the deploy)
- *   - we don't have write permission on /usr/share/fonts (non-root)
+ * Approach:
+ *   1. Bundled Inter .otf/.ttf live in `server/fonts/` (deployed).
+ *      We don't COPY them — fontconfig's `<dir>` directive lets it
+ *      read fonts from any path.
+ *   2. Write `~/.config/fontconfig/fonts.conf` that registers the
+ *      server/fonts/ dir as a font source AND defines the alias
+ *      mappings (system-ui → Inter, ui-sans-serif → Inter, etc.).
+ *   3. Run fc-cache on the bundled dir if available.
  *
- * On a fresh boot of the Azure container (which runs Node as root),
- * this populates the system font dir + fontconfig alias file so
- * Tailwind's `system-ui` resolves to Inter for headless captures.
+ * No-op on non-Linux + when bundled fonts aren't present.
  */
 function installFontsBestEffort(): void {
   if (process.platform !== "linux") {
     process.stdout.write(`[shotcraft-web] font install skipped: platform=${process.platform}\n`);
     return;
   }
-  // Server runs from server/dist/index.js. Bundle fonts live next to
-  // it at server/fonts/.
   const here = dirname(fileURLToPath(import.meta.url));
   const fontsSrc = join(here, "..", "fonts");
   if (!existsSync(fontsSrc)) {
     process.stdout.write(`[shotcraft-web] font install skipped: ${fontsSrc} not present\n`);
     return;
   }
-  const fontsDst = "/usr/share/fonts/truetype/inter";
-  try {
-    mkdirSync(fontsDst, { recursive: true });
-    const files = readdirSync(fontsSrc).filter((f) => f.endsWith(".otf") || f.endsWith(".ttf"));
-    for (const f of files) {
-      copyFileSync(join(fontsSrc, f), join(fontsDst, f));
-    }
-    process.stdout.write(
-      `[shotcraft-web] font install: copied ${files.length} files to ${fontsDst}\n`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stdout.write(`[shotcraft-web] font install: copy failed (${msg}) — skipping\n`);
-    return;
-  }
-  // Write fontconfig aliases mapping abstract families (system-ui,
-  // ui-sans-serif, etc.) to Inter. Tailwind's `font-sans` stack uses
-  // these and Linux fontconfig has no built-in alias for them.
-  const aliasesPath = "/etc/fonts/conf.d/99-shotcraft-aliases.conf";
-  const aliasesXml = `<?xml version="1.0"?>
+  process.stdout.write(`[shotcraft-web] font install: source dir ${fontsSrc}\n`);
+  const home = process.env.HOME || "/root";
+  const fcDir = join(home, ".config", "fontconfig");
+  const fcConf = join(fcDir, "fonts.conf");
+  const fcXml = `<?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
+  <!-- Register the deploy bundle's font dir so fontconfig finds Inter. -->
+  <dir>${fontsSrc}</dir>
+  <!-- Map Tailwind's font-sans stack to Inter on Linux, where these
+       abstract families have no built-in alias. -->
   <alias binding="strong"><family>system-ui</family><prefer><family>Inter</family></prefer></alias>
   <alias binding="strong"><family>ui-sans-serif</family><prefer><family>Inter</family></prefer></alias>
   <alias binding="strong"><family>-apple-system</family><prefer><family>Inter</family></prefer></alias>
@@ -92,23 +84,34 @@ function installFontsBestEffort(): void {
 </fontconfig>
 `;
   try {
-    mkdirSync(dirname(aliasesPath), { recursive: true });
-    writeFileSync(aliasesPath, aliasesXml);
-    process.stdout.write(`[shotcraft-web] font install: wrote ${aliasesPath}\n`);
+    mkdirSync(fcDir, { recursive: true });
+    writeFileSync(fcConf, fcXml);
+    process.stdout.write(`[shotcraft-web] font install: wrote ${fcConf}\n`);
   } catch (err) {
     process.stdout.write(
-      `[shotcraft-web] font install: alias write failed (${err instanceof Error ? err.message : String(err)})\n`,
+      `[shotcraft-web] font install: write ${fcConf} failed (${err instanceof Error ? err.message : String(err)})\n`,
+    );
+    return;
+  }
+  // Refresh user-level font cache so fontconfig picks up the new
+  // dir + aliases. fc-cache writes to ~/.cache/fontconfig/ which is
+  // user-writable.
+  try {
+    execSync("fc-cache -f", { stdio: "pipe" });
+    process.stdout.write(`[shotcraft-web] font install: fc-cache refreshed\n`);
+  } catch (err) {
+    // fc-cache might not be on PATH on this image. Fontconfig will
+    // still scan fonts at chromium-start time, just slower per launch.
+    process.stdout.write(
+      `[shotcraft-web] font install: fc-cache unavailable (${err instanceof Error ? err.message.slice(0, 80) : "err"})\n`,
     );
   }
-  // Refresh font cache so Chromium picks up the new fonts + aliases.
+  // Verify by running fc-match if available.
   try {
-    execSync("fc-cache -f", { stdio: "ignore" });
-    process.stdout.write(`[shotcraft-web] font install: fc-cache refreshed\n`);
+    const result = execSync("fc-match system-ui", { encoding: "utf8" }).trim();
+    process.stdout.write(`[shotcraft-web] font install: fc-match system-ui → ${result}\n`);
   } catch {
-    // fc-cache may not be on PATH if fontconfig wasn't installed —
-    // captures will still pick up the fonts on next boot when
-    // Chromium re-scans.
-    process.stdout.write(`[shotcraft-web] font install: fc-cache not available (best-effort)\n`);
+    /* fc-match not available; ignore */
   }
 }
 
