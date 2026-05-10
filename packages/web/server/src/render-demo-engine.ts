@@ -1857,32 +1857,19 @@ async function discoverWithBrowser(
         norm: currentUrlNorm,
       });
     }
-    // Always wait for the SPA shell to render visible nav controls before
-    // running discovery techniques. Without this, link-crawl extracts
-    // `<a href>`s from a "Loading..." shell (returns 0 routes) and
-    // nav-click finds zero candidates. The wait runs whether we
-    // navigated or not — auth can land us on the right URL while the
-    // dashboard is still hydrating, and techniques would otherwise race
-    // against an empty DOM.
-    await Promise.race([
-      page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => null),
-      page
-        .waitForFunction(
-          `(() => {
-            const visibleButtons = Array.from(document.querySelectorAll('button'))
-              .filter((b) => b.offsetParent !== null).length;
-            const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
-              .filter((a) => a.offsetParent !== null).length;
-            if (visibleButtons + visibleAnchors > 8) return true;
-            const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar, [class*="sidebar" i]');
-            if (nav && nav.offsetParent !== null && nav.querySelectorAll('a, button, [role="link"]').length > 2) return true;
-            return false;
-          })()`,
-          { timeout: 15_000 },
-        )
-        .catch(() => null),
-    ]);
-    await page.waitForTimeout(500);
+    // Always wait for the SPA shell to render visible nav controls
+    // before running discovery techniques. Without this, link-crawl
+    // extracts `<a href>`s from a "Loading..." shell (returns 0 routes)
+    // and nav-click finds zero candidates.
+    //
+    // Using waitForPageReady — same helper the capture path uses. Its
+    // looksReal heuristic rejects pages with a visible "Loading..." leaf
+    // element OR 4+ visible skeleton/shimmer elements, then requires
+    // a populated nav OR many visible anchors/buttons. networkidle
+    // alone isn't enough — BudgetBug has a brief networkidle moment
+    // between auth redirect and the dashboard data fetch, which would
+    // resolve the race before the sidebar is ever visible.
+    await waitForPageReady(page, { timeoutMs: 15_000, settleMs: 500 });
     engineLog("discover.start-url-loaded", await pageSnapshot(page));
 
     // Run user-supplied post-auth setup actions (dismiss tour modal,
@@ -2165,14 +2152,24 @@ async function discoverViaLinks(
     visited.add(norm);
 
     try {
-      await page.goto(next.url, {
-        waitUntil: "domcontentloaded",
-        timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
-      });
+      // Skip the navigation if we're already on next.url — the start-URL
+      // wait above already loaded this URL with a 15s budget, and a
+      // redundant goto() would throw away that state and force us to
+      // re-wait. Compare via normalized URL so trailing-slash variants
+      // ("https://x.com" vs "https://x.com/") don't trigger reloads.
+      const currentNorm = normalizeUrl(page.url());
+      const nextNorm = normalizeUrl(next.url);
+      if (currentNorm !== nextNorm) {
+        await page.goto(next.url, {
+          waitUntil: "domcontentloaded",
+          timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
+        });
+      }
       // Wait for the page to actually render content before extracting
-      // links. Without this, we'd extract <a href>s from a "Loading..."
-      // shell and miss the real nav.
-      await waitForPageReady(page, { timeoutMs: 6_000, settleMs: 200 });
+      // links. 12s budget so SPAs with slow data-fetches (BudgetBug
+      // dashboard, Tailwind UIs with skeleton states) finish hydrating
+      // before we try to read the nav.
+      await waitForPageReady(page, { timeoutMs: 12_000, settleMs: 300 });
     } catch {
       continue;
     }
