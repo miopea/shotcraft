@@ -21,8 +21,7 @@
 
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import express from "express";
 import { templatesRouter } from "./routes/templates.js";
 import { renderDemoRouter } from "./routes/render-demo.js";
@@ -32,90 +31,33 @@ import { discoverRouter } from "./routes/discover.js";
 import { localConfigRouter, LOCAL_CONFIG_PATH } from "./routes/local-config.js";
 
 /**
- * Set up fontconfig so Chromium can find Inter + alias `system-ui`
- * etc. to it. Crucially: writes to USER-writable fontconfig paths
- * (`~/.config/fontconfig/fonts.conf`), NOT /usr/share/fonts. Azure
- * App Service runs Node as a non-root app user, so /usr/share/fonts
- * writes fail with EACCES. The user's fontconfig is read by every
- * fontconfig client (including Chromium child processes) since they
- * inherit `$HOME` from the Node process.
+ * Log the bundled-fontconfig setup so deploys are easy to verify.
  *
- * Approach:
- *   1. Bundled Inter .otf/.ttf live in `server/fonts/` (deployed).
- *      We don't COPY them — fontconfig's `<dir>` directive lets it
- *      read fonts from any path.
- *   2. Write `~/.config/fontconfig/fonts.conf` that registers the
- *      server/fonts/ dir as a font source AND defines the alias
- *      mappings (system-ui → Inter, ui-sans-serif → Inter, etc.).
- *   3. Run fc-cache on the bundled dir if available.
+ * The actual setup is static: a fonts.conf ships in the deploy at
+ * `server/fonts/fonts.conf` (registers Inter + aliases system-ui etc.
+ * to it) and the App Service env var
+ * `FONTCONFIG_FILE=/home/site/wwwroot/server/fonts/fonts.conf` points
+ * fontconfig at it. Chromium child processes inherit the env var.
  *
- * No-op on non-Linux + when bundled fonts aren't present.
+ * This previously tried to WRITE the conf to `~/.config/fontconfig`
+ * at boot — that approach was abandoned because (a) `$HOME` on App
+ * Service is `/home` (no per-user dir), (b) the container's stdout
+ * doesn't surface in any reachable log, so failures were invisible,
+ * and (c) a static bundled file is strictly simpler than a runtime
+ * write.
  */
-function installFontsBestEffort(): void {
-  if (process.platform !== "linux") {
-    process.stdout.write(`[shotcraft-web] font install skipped: platform=${process.platform}\n`);
-    return;
-  }
+function logFontConfigStatus(): void {
   const here = dirname(fileURLToPath(import.meta.url));
   const fontsSrc = join(here, "..", "fonts");
-  if (!existsSync(fontsSrc)) {
-    process.stdout.write(`[shotcraft-web] font install skipped: ${fontsSrc} not present\n`);
-    return;
-  }
-  process.stdout.write(`[shotcraft-web] font install: source dir ${fontsSrc}\n`);
-  const home = process.env.HOME || "/root";
-  const fcDir = join(home, ".config", "fontconfig");
-  const fcConf = join(fcDir, "fonts.conf");
-  const fcXml = `<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <!-- Register the deploy bundle's font dir so fontconfig finds Inter. -->
-  <dir>${fontsSrc}</dir>
-  <!-- Map Tailwind's font-sans stack to Inter on Linux, where these
-       abstract families have no built-in alias. -->
-  <alias binding="strong"><family>system-ui</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="strong"><family>ui-sans-serif</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="strong"><family>-apple-system</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="strong"><family>BlinkMacSystemFont</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="strong"><family>SF Pro</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="strong"><family>SF Pro Display</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="strong"><family>SF Pro Text</family><prefer><family>Inter</family></prefer></alias>
-  <alias binding="weak"><family>sans-serif</family><prefer><family>Inter</family></prefer></alias>
-</fontconfig>
-`;
-  try {
-    mkdirSync(fcDir, { recursive: true });
-    writeFileSync(fcConf, fcXml);
-    process.stdout.write(`[shotcraft-web] font install: wrote ${fcConf}\n`);
-  } catch (err) {
-    process.stdout.write(
-      `[shotcraft-web] font install: write ${fcConf} failed (${err instanceof Error ? err.message : String(err)})\n`,
-    );
-    return;
-  }
-  // Refresh user-level font cache so fontconfig picks up the new
-  // dir + aliases. fc-cache writes to ~/.cache/fontconfig/ which is
-  // user-writable.
-  try {
-    execSync("fc-cache -f", { stdio: "pipe" });
-    process.stdout.write(`[shotcraft-web] font install: fc-cache refreshed\n`);
-  } catch (err) {
-    // fc-cache might not be on PATH on this image. Fontconfig will
-    // still scan fonts at chromium-start time, just slower per launch.
-    process.stdout.write(
-      `[shotcraft-web] font install: fc-cache unavailable (${err instanceof Error ? err.message.slice(0, 80) : "err"})\n`,
-    );
-  }
-  // Verify by running fc-match if available.
-  try {
-    const result = execSync("fc-match system-ui", { encoding: "utf8" }).trim();
-    process.stdout.write(`[shotcraft-web] font install: fc-match system-ui → ${result}\n`);
-  } catch {
-    /* fc-match not available; ignore */
-  }
+  const fcConf = join(fontsSrc, "fonts.conf");
+  const envSet = process.env.FONTCONFIG_FILE;
+  process.stdout.write(
+    `[shotcraft-web] fontconfig: bundled=${existsSync(fcConf)} ` +
+      `FONTCONFIG_FILE=${envSet ?? "<unset>"} fontsDir=${fontsSrc}\n`,
+  );
 }
 
-installFontsBestEffort();
+logFontConfigStatus();
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3002);
