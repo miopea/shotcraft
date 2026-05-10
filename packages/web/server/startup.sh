@@ -45,15 +45,28 @@ else
   # Tailwind's `font-sans` stack: `ui-sans-serif, system-ui,
   # sans-serif, ...`. On Linux without good fonts installed,
   # Chromium falls back to Liberation/DejaVu and the result looks
-  # generic-monospace-ish. Inter + Roboto + Noto give us the same
-  # rendering quality web apps target on macOS / iOS.
-  apt-get install -y --no-install-recommends \
-    fonts-liberation \
-    fonts-inter \
-    fonts-roboto \
-    fonts-noto-core \
-    fonts-noto-color-emoji \
-    fontconfig
+  # generic.
+  #
+  # We install fontconfig (needed to read aliases below) but DON'T
+  # rely on apt for the main UI fonts:
+  #   - `fonts-inter` doesn't exist in Debian Bookworm.
+  #   - `fonts-roboto` / `fonts-noto-core` apt-installs were flaky
+  #     when the deploy ran in restricted contexts — we'd see them
+  #     succeed-then-vanish across container restarts.
+  # Solution: ship Inter .otf files in the deploy bundle itself
+  # (server/fonts/) and copy them into /usr/share/fonts at startup.
+  # Pure file copy, no apt dependency, no network call.
+  apt-get install -y --no-install-recommends fontconfig
+  # Copy bundled Inter into the system font dir.
+  if [ -d "/home/site/wwwroot/server/fonts" ]; then
+    mkdir -p /usr/share/fonts/truetype/inter
+    cp /home/site/wwwroot/server/fonts/*.otf /usr/share/fonts/truetype/inter/ 2>/dev/null || true
+    cp /home/site/wwwroot/server/fonts/*.ttf /usr/share/fonts/truetype/inter/ 2>/dev/null || true
+    echo "[startup] Inter installed from deploy bundle:"
+    ls /usr/share/fonts/truetype/inter/
+  else
+    echo "[startup] WARN: server/fonts/ not in deploy bundle — captures will use generic Linux fallback."
+  fi
   # Map Tailwind's abstract font-family names (`system-ui`,
   # `ui-sans-serif`, `sans-serif`) to Inter so BudgetBug-style
   # CSS resolves to a quality font on Linux. Without this, Linux

@@ -53,6 +53,18 @@ jobs:
           rm -rf "$DEPLOY" && mkdir -p "$DEPLOY/server" "$DEPLOY/dist" "$DEPLOY/templates"
           cp -r packages/web/server/dist "$DEPLOY/server/dist"
           cp -r packages/web/dist/client "$DEPLOY/dist/client"
+          # App Service runs `bash startup.sh` (configured via
+          # `appCommandLine`). Without staging it here, the container
+          # boots whatever stale startup.sh existed on first deploy
+          # and ignores changes pushed to source. Bug surfaced when
+          # Inter / fontconfig aliases changes didn't take effect on
+          # live container — confirmed via Kudu fc-list.
+          cp packages/web/server/startup.sh "$DEPLOY/startup.sh"
+          chmod +x "$DEPLOY/startup.sh"
+          # Bundle Inter font files (.otf + variable .ttf). Inter
+          # isn't in Debian repos and downloading at boot was flaky;
+          # baking it into the deploy is the reliable path.
+          cp -r packages/web/server/fonts "$DEPLOY/server/fonts"
 
           # Bundle each first-party template's wrapper assets so the
           # live-demo render path can find them at runtime. Frames dir is
