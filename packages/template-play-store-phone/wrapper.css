@@ -9,7 +9,7 @@
 :root {
   --canvas-w: 1080px;
   --canvas-h: 1920px;
-  --device-width-pct: 78%;
+  --device-width-pct: 75%;
   /* Material-coded saturated dark — emerald 950 → cyan 700 */
   --bg-from: #064e3b;
   --bg-to: #0e7490;
@@ -57,7 +57,10 @@ body {
 
 .caption-block {
   position: absolute;
-  top: 8%;
+  /* top: 5% leaves headroom for 2-line caption + 2-line subtitle without
+     bumping the device frame. Earlier (top: 8% + 78% device) collided
+     in the worst case. */
+  top: 5%;
   left: 50%;
   transform: translateX(-50%);
   width: 82%;

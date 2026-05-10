@@ -14,7 +14,7 @@
 :root {
   --canvas-w: 1284px;
   --canvas-h: 2778px;
-  --device-width-pct: 75%;
+  --device-width-pct: 72%;
   --bg-from: #0f172a;
   --bg-to: #064e3b;
   --caption-color: #f1f5f9;
@@ -60,7 +60,10 @@ body {
 
 .caption-block {
   position: absolute;
-  top: 9%;
+  /* top: 6% leaves headroom for 2-line caption + 2-line subtitle without
+     bumping the device frame, which starts ~y=29% with the 72%-wide
+     device. Earlier (top: 9% + 75% device) collided in the worst case. */
+  top: 6%;
   left: 50%;
   transform: translateX(-50%);
   width: 80%;
