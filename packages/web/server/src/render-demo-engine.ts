@@ -2294,6 +2294,13 @@ async function discoverViaNavClick(
 
   if (!Array.isArray(labels) || labels.length === 0) return results;
 
+  // If anchor-scan already found enough routes, skip the expensive
+  // button-click loop. Each click cycle does goto + wait + click +
+  // settle — about 3s per candidate, so 12 candidates can blow a 60s
+  // deadline on its own. Most React-Router SPAs use <Link> → <a>;
+  // button-click is the fallback for `<button onClick>`-only nav.
+  if (results.length >= 3) return results;
+
   for (const labelRaw of labels) {
     if (typeof labelRaw !== "string") continue;
     const label = labelRaw;
