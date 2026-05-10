@@ -221,36 +221,63 @@ async function waitForPageReady(
 ): Promise<void> {
   const timeoutMs = opts.timeoutMs ?? 8_000;
   const settleMs = opts.settleMs ?? 300;
+
+  // Shared `looksReal()` body. We need to detect "the layout has rendered
+  // but the data hasn't" — e.g. BudgetBug shows the full sidebar + a
+  // centered "Loading..." spinner in the main panel. Body innerText is
+  // way over 30 chars in that state and doesn't match `^loading$`
+  // exactly, so the old heuristic returned true immediately and we
+  // captured a Loading screenshot.
+  //
+  // Stronger checks:
+  //   - body innerText length > 30 (some real content)
+  //   - body isn't ALL placeholder
+  //   - NO visible element on the page has text content equal to just
+  //     "Loading..." / "loading" / "loading…" — that's the centered
+  //     spinner pattern. We walk leaf-ish elements (no children with
+  //     text) so we don't false-positive on a help blurb that mentions
+  //     loading inside a longer paragraph.
+  const looksRealJs = `(() => {
+    const t = (document.body?.innerText || '').trim();
+    if (t.length < 30) return false;
+    if (/^loading[\\s.…]*$/i.test(t)) return false;
+    // Walk leaf elements; reject if any visible one is just "Loading..."
+    const all = document.querySelectorAll('div, p, span, h1, h2, h3, section, main');
+    for (const el of all) {
+      if (el.children.length > 0) continue;            // not a leaf
+      if (!(el instanceof HTMLElement)) continue;
+      if (el.offsetParent === null) continue;          // not visible
+      const own = (el.textContent || '').trim();
+      if (!own) continue;
+      if (own.length > 20) continue;                   // long text → not a spinner
+      if (/^loading[\\s.…]*$/i.test(own)) return false;
+    }
+    // Skeleton detection: pages mid-data-fetch render placeholder bars
+    // commonly tagged with class names like "skeleton" / "placeholder"
+    // / "shimmer" / "animate-pulse" (Tailwind UI default). If we see
+    // 4+ visible skeleton elements, the data is still in-flight and
+    // we should keep waiting. Threshold of 4 avoids false-positives
+    // on a single inline spinner.
+    const skel = Array.from(document.querySelectorAll(
+      '[class*="skeleton" i], [class*="shimmer" i], [class*="placeholder" i], .animate-pulse',
+    )).filter((el) => el instanceof HTMLElement && el.offsetParent !== null);
+    if (skel.length >= 4) return false;
+    return true;
+  })()`;
+
   await Promise.race([
     // networkidle alone isn't enough — we ALSO need the page to not
-    // be in a placeholder state. Compose: networkidle + body has
-    // real content (not just "Loading...").
+    // be in a placeholder state. Compose: networkidle + body has real
+    // content (not Loading shell, not centered spinner).
     (async () => {
       await page.waitForLoadState("networkidle", { timeout: timeoutMs });
-      // After networkidle, briefly verify body has real content. If
-      // we're still on a Loading shell, return null so the heuristic
-      // path can win instead.
-      const looksReal = await page
-        .evaluate(
-          `(() => {
-          const t = (document.body?.innerText || '').trim();
-          // "Loading..." alone is ~10 chars. Real pages have way more.
-          if (t.length < 30) return false;
-          // Body that's JUST "Loading..." (sometimes with whitespace).
-          if (/^loading[\\s.…]*$/i.test(t)) return false;
-          return true;
-        })()`,
-        )
-        .catch(() => false);
+      const looksReal = await page.evaluate(looksRealJs).catch(() => false);
       return looksReal ? "networkidle" : null;
     })().catch(() => null),
     page
       .waitForFunction(
         `(() => {
-          const t = (document.body?.innerText || '').trim();
-          // Reject placeholder states.
-          if (t.length < 30) return false;
-          if (/^loading[\\s.…]*$/i.test(t)) return false;
+          if (!(${looksRealJs})) return false;
           // Now check for interactive content.
           const visibleButtons = Array.from(document.querySelectorAll('button'))
             .filter((b) => b.offsetParent !== null).length;
@@ -655,7 +682,7 @@ async function captureWithBrowser(browser: Browser, args: CaptureWithBrowserArgs
       // is unreliable on SPAs with continuous activity and can hang
       // indefinitely; the helper races networkidle against a content
       // heuristic and a hard timeout, then awaits document.fonts.ready.
-      await waitForPageReady(page, { timeoutMs: 12_000, settleMs: 400 });
+      await waitForPageReady(page, { timeoutMs: 15_000, settleMs: 400 });
       // Run setup actions first (dismiss tour modal, accept cookie
       // banner, etc.) — these apply to every screen because each
       // capture uses a fresh browser context with empty localStorage.
