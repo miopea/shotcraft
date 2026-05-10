@@ -1819,40 +1819,44 @@ async function discoverWithBrowser(
           waitUntil: "domcontentloaded",
           timeout: DISCOVER_DEFAULTS.perPageTimeoutMs,
         });
-        // After navigation the page is "Loading..." — wait for content
-        // to render before running techniques. Same shape as the post-
-        // auth content-signal race.
-        await Promise.race([
-          page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => null),
-          page
-            .waitForFunction(
-              `(() => {
-                const visibleButtons = Array.from(document.querySelectorAll('button'))
-                  .filter((b) => b.offsetParent !== null).length;
-                const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
-                  .filter((a) => a.offsetParent !== null).length;
-                if (visibleButtons + visibleAnchors > 8) return true;
-                const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar');
-                if (nav && nav.offsetParent !== null && nav.querySelectorAll('a, button, [role="link"]').length > 2) return true;
-                return false;
-              })()`,
-              { timeout: 15_000 },
-            )
-            .catch(() => null),
-        ]);
-        await page.waitForTimeout(500);
       } catch {
         // Even if the initial nav fails we let the techniques try; sitemap
         // + common-routes fetches still work as long as the origin is
         // reachable.
       }
-      engineLog("discover.start-url-loaded", await pageSnapshot(page));
     } else {
       engineLog("discover.start-url-already-here", {
         url: page.url(),
         norm: currentUrlNorm,
       });
     }
+    // Always wait for the SPA shell to render visible nav controls before
+    // running discovery techniques. Without this, link-crawl extracts
+    // `<a href>`s from a "Loading..." shell (returns 0 routes) and
+    // nav-click finds zero candidates. The wait runs whether we
+    // navigated or not — auth can land us on the right URL while the
+    // dashboard is still hydrating, and techniques would otherwise race
+    // against an empty DOM.
+    await Promise.race([
+      page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => null),
+      page
+        .waitForFunction(
+          `(() => {
+            const visibleButtons = Array.from(document.querySelectorAll('button'))
+              .filter((b) => b.offsetParent !== null).length;
+            const visibleAnchors = Array.from(document.querySelectorAll('a[href]'))
+              .filter((a) => a.offsetParent !== null).length;
+            if (visibleButtons + visibleAnchors > 8) return true;
+            const nav = document.querySelector('nav, [role="navigation"], aside, .sidebar, [class*="sidebar" i]');
+            if (nav && nav.offsetParent !== null && nav.querySelectorAll('a, button, [role="link"]').length > 2) return true;
+            return false;
+          })()`,
+          { timeout: 15_000 },
+        )
+        .catch(() => null),
+    ]);
+    await page.waitForTimeout(500);
+    engineLog("discover.start-url-loaded", await pageSnapshot(page));
 
     // Run user-supplied post-auth setup actions (dismiss tour modal,
     // accept cookie banner, etc.) before discovery techniques. If any
@@ -2171,23 +2175,88 @@ async function discoverViaLinks(
 }
 
 /**
- * Click buttons inside <nav> / header / sidebar containers, watching for
- * URL changes. Catches React-Router routes that render as `<button>` +
- * onClick navigation rather than `<a href>` (link-crawl misses those).
+ * Discover routes from elements inside `<nav>` / header / sidebar
+ * containers. Catches React-Router routes that link-crawl misses —
+ * either because they render as `<button>` + onClick navigation, or
+ * because the sidebar hadn't rendered yet when link-crawl ran.
+ *
+ * Two phases:
+ *   1. Collect `<a href>` anchors inside nav-like containers and
+ *      derive same-origin paths directly from their `href`. No
+ *      clicking — anchors are deterministic and fast.
+ *   2. Collect visible `<button>` labels inside nav-like containers,
+ *      then click each one in turn and record the resulting URL.
+ *      For buttons, we have to actually click because the route lives
+ *      in the onClick handler, not the DOM.
  *
  * Safety:
  *   - Only `<button type="button">`-style elements (skip submit).
  *   - Skip text matching destructive keywords (sign out, delete, …).
- *   - Cap at 12 candidates per session to keep budget bounded.
- *   - Reload between clicks to reset DOM state.
+ *   - Cap at 12 button candidates per session to keep budget bounded.
+ *   - Reload between button clicks to reset DOM state.
  */
 async function discoverViaNavClick(
   page: Page,
   origin: string,
   startUrl: string,
 ): Promise<DiscoveredRoute[]> {
-  // Collect button label texts. We re-query by text after each reload
-  // because React rerenders invalidate any positional selector.
+  const results: DiscoveredRoute[] = [];
+  const seenPaths = new Set<string>();
+
+  // Phase 1: harvest <a href> anchors inside nav containers. No click
+  // needed — these are vanilla HTML hyperlinks, even when wrapped by
+  // React Router's <Link>.
+  const navAnchorHrefs: unknown = await page
+    .evaluate(
+      `(() => {
+        const sels = [
+          'nav a[href]',
+          'header a[href]',
+          '[role="navigation"] a[href]',
+          'aside a[href]',
+          '.navbar a[href]',
+          '.nav a[href]',
+          '.sidebar a[href]',
+          '[class*="sidebar" i] a[href]',
+          '[data-testid*="nav" i] a[href]'
+        ];
+        const out = [];
+        const seen = new Set();
+        for (const sel of sels) {
+          for (const a of document.querySelectorAll(sel)) {
+            if (a.offsetParent === null) continue;
+            const href = a.href;
+            if (!href || seen.has(href)) continue;
+            seen.add(href);
+            out.push(href);
+          }
+        }
+        return out;
+      })()`,
+    )
+    .catch(() => [] as unknown);
+
+  if (Array.isArray(navAnchorHrefs)) {
+    for (const hrefRaw of navAnchorHrefs) {
+      if (typeof hrefRaw !== "string") continue;
+      const sameOrigin = parseSameOriginHref(hrefRaw, origin);
+      if (!sameOrigin) continue;
+      let parsed: URL;
+      try {
+        parsed = new URL(sameOrigin);
+      } catch {
+        continue;
+      }
+      const path = pathForResult(parsed, origin);
+      const norm = path.replace(/\/$/, "") || "/";
+      if (seenPaths.has(norm)) continue;
+      seenPaths.add(norm);
+      results.push({ path, title: path, depth: 1, source: "nav" });
+    }
+  }
+
+  // Phase 2: collect button labels (re-query by text after each reload
+  // because React rerenders invalidate any positional selector).
   const labels: unknown = await page
     .evaluate(
       `(() => {
@@ -2199,6 +2268,7 @@ async function discoverViaNavClick(
           '.navbar button',
           '.nav button',
           '.sidebar button',
+          '[class*="sidebar" i] button',
           '[data-testid*="nav" i] button'
         ];
         const out = [];
@@ -2222,10 +2292,7 @@ async function discoverViaNavClick(
     )
     .catch(() => [] as unknown);
 
-  if (!Array.isArray(labels) || labels.length === 0) return [];
-
-  const results: DiscoveredRoute[] = [];
-  const seenPaths = new Set<string>();
+  if (!Array.isArray(labels) || labels.length === 0) return results;
 
   for (const labelRaw of labels) {
     if (typeof labelRaw !== "string") continue;
