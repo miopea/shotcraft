@@ -1,5 +1,17 @@
 # @shotcraft/template-app-store-iphone
 
+## 1.1.0
+
+### Minor Changes
+
+- Apple App Store templates are now front-facing (head-on) instead of
+  3D-pivoted. Apple's App Store gallery convention is a straight device;
+  the previous `rotateY`/`rotateX` perspective tilt also raised the
+  frame's top corner into the caption, causing caption/frame collisions.
+  A flat frame has a predictable bounding box. Template IDs, viewports,
+  and output dimensions (iPhone 1284×2778, iPad 2064×2752) are unchanged
+  — only the composite's device presentation differs.
+
 ## 1.0.0
 
 ### Minor Changes

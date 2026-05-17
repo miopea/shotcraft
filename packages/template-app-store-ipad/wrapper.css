@@ -85,16 +85,17 @@ body {
   bottom: 5%;
   display: flex;
   justify-content: center;
-  perspective: 3200px;
-  perspective-origin: 50% 50%;
 }
 
 .device {
   position: relative;
   width: var(--device-width-pct);
-  transform: rotateY(-7deg) rotateX(2deg) translateZ(0);
-  transform-origin: center;
-  filter: drop-shadow(40px 60px 80px rgba(0, 0, 0, 0.35));
+  /*
+   * Front-facing (head-on) — matches Apple's App Store gallery
+   * convention. No 3D pivot; a flat frame has a predictable bounding
+   * box and won't rise into the caption.
+   */
+  filter: drop-shadow(0 50px 80px rgba(0, 0, 0, 0.35));
 }
 
 /*

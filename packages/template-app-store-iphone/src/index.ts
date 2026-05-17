@@ -6,8 +6,8 @@ import type { ShotcraftTemplate } from "shotcraft";
  * Shotcraft template — Apple App Store iPhone 6.5" tier.
  *
  * - Logical capture viewport: 428×926 CSS px @ dpr 3 → 1284×2778 raw pixels.
- *   Capturing at the dpr-multiplied physical size avoids upsampling under the
- *   wrapper's 3D perspective transform.
+ *   Capturing at the dpr-multiplied physical size keeps the screen crisp
+ *   inside the front-facing (head-on) device frame.
  * - Final composite: 1284×2778 — Apple's REQUIRED iPhone 6.5" tier for the
  *   App Store.
  *

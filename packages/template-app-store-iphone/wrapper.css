@@ -3,8 +3,9 @@
  *
  * Canvas is 1284×2778 (App Store iPhone 6.5" tier). Body fills the canvas.
  * Layout:
- *   - Caption block: anchored ~12% from top, centered, max-width 80%.
- *   - Device frame: anchored to lower portion of canvas, 75% wide, 3D-tilted.
+ *   - Caption block: anchored 6% from top, centered, width 80%.
+ *   - Device frame: anchored to lower portion of canvas, 72% wide,
+ *     front-facing (head-on, no 3D pivot — Apple gallery convention).
  *
  * Theme is set by the wrapper's <script> from the URL param: body[data-theme]
  * flips a CSS custom-property block. Most colors derive from the brand
@@ -94,20 +95,19 @@ body {
   bottom: 5%;
   display: flex;
   justify-content: center;
-  /*
-   * Give the perspective transform a deep parent so the vanishing point feels
-   * realistic. Without this, the rotation looks flat / paper-like.
-   */
-  perspective: 2400px;
-  perspective-origin: 50% 50%;
 }
 
 .device {
   position: relative;
   width: var(--device-width-pct);
-  transform: rotateY(-9deg) rotateX(3deg) translateZ(0);
-  transform-origin: center;
-  filter: drop-shadow(30px 50px 60px rgba(0, 0, 0, 0.35));
+  /*
+   * Front-facing (head-on) — Apple's App Store gallery convention is a
+   * straight device, not a 3D-pivoted one. The earlier rotateY/rotateX
+   * tilt also raised the top corner into the caption, which is why
+   * captions were colliding with the frame. A flat frame has a
+   * predictable bounding box.
+   */
+  filter: drop-shadow(0 40px 60px rgba(0, 0, 0, 0.35));
 }
 
 /*
