@@ -12,7 +12,7 @@ step, no second source of truth to keep in sync.
    plus the auth helpers (`apiLogin`, `formLogin`, `injectSession`,
    `chain`).
 3. **[CLI reference](./cli.md)** — every subcommand and global flag.
-4. **[Templates gallery](./templates.md)** — visual previews of all six
+4. **[Templates gallery](./templates.md)** — visual previews of all seven
    first-party templates rendered against a real app.
 5. **[Build your own template](./contributing-templates.md)** — the
    package contract and a 60-line starter.

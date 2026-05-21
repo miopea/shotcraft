@@ -1,14 +1,14 @@
 # Shotcraft — BudgetBug example
 
 The canonical Shotcraft demo. Drives BudgetBug's running dev server through
-all 6 first-party templates to produce a full marketing screenshot set in one
+all 7 first-party templates to produce a full marketing screenshot set in one
 command.
 
 ## What this produces
 
-Six screens × six templates × dark + light = ~66 PNGs covering App Store
-(iPhone + iPad), Play Store (phone + tablet), GitHub README hero, and Open
-Graph / Twitter cards.
+Six screens × seven templates × dark + light = ~78 PNGs covering App Store
+(iPhone + iPad), Play Store (phone + tablet), GitHub README hero, Open
+Graph / Twitter cards, and desktop browser-chrome heroes.
 
 ```
 screenshots/

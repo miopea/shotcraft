@@ -136,7 +136,7 @@ capture context before the page navigation. Three flavors:
 
 ### Templates
 
-Pick from the six first-party templates' ids:
+Pick from the seven first-party templates' ids:
 
 - `app-store-iphone` — 1284×2778
 - `app-store-ipad` — 2064×2752
@@ -144,6 +144,7 @@ Pick from the six first-party templates' ids:
 - `play-store-tablet` — 1920×1200
 - `readme-hero` — 1280×640
 - `social-og-card` — 1200×630 (dark only)
+- `desktop-hero` — 1920×1080 (desktop viewport, browser chrome)
 
 The deployer ships each template's `wrapper.html` + `wrapper.css` +
 `frames/` under `templates/<id>/` in the zip — see the deploy stage

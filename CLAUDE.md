@@ -6,7 +6,7 @@
 
 - **What this is**: open-source npm tool that captures screenshots from a running web app (via Playwright) and composites them into App Store / Play Store / README hero / social card images. The wedge: "captures from your live app" — competing tools (screenshots.pro, Bannerbear, Placid) all require manually uploaded screenshots.
 - **License**: MIT (operator: miopea)
-- **Status**: v0 scaffold — Phase 1 + partial Phase 8 done. Plan at `.claude/plans/shotcraft-v1.md`.
+- **Status**: v0.1 ready — all 8 phases of the v1 plan shipped through web release 1.0.17 (front-facing Apple templates, NDJSON-streamed Discover with live phase timeline, auto-detect form auth, 7 first-party templates including desktop-hero). Plan at `.claude/plans/shotcraft-v1.md`.
 - **No `any` types** — TypeScript strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`
 - **No `ts-ignore`** — fix the type error
 - **Commit format**: conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
@@ -34,9 +34,9 @@ shotcraft/                                  (repo root)
 │   ├── web/                                → npm: @shotcraft/web (hosted companion)
 │   │   ├── server/src/                     # Express, mirrors BudgetBug pattern
 │   │   └── client/src/                     # React + Vite
-│   └── template-*/                         → 6 first-party templates (Phase 4)
+│   └── template-*/                         → 7 first-party templates (Phase 4 + desktop-hero)
 ├── examples/budgetbug/                     # reference config (Phase 5)
-├── docs/                                   # Astro Starlight docs site (Phase 6)
+├── docs/                                   # Plain markdown docs (rendered on GitHub)
 ├── .changeset/                             # Changesets versioning
 ├── .github/workflows/                      # ci.yml, release.yml
 ├── pnpm-workspace.yaml
@@ -58,38 +58,38 @@ pnpm changeset          # record a version-bump intent for the next release
 
 ## Tech Stack
 
-| Layer                | Choice                                   |
-| -------------------- | ---------------------------------------- |
-| Language             | TypeScript ^5.6 strict                   |
-| Package mgr          | pnpm 11 (workspaces)                     |
-| Bundler (core)       | tsup → ESM only                          |
-| Bundler (web client) | Vite 5                                   |
-| Runtime (web server) | Express 5 + tsx (dev) / tsc (prod)       |
-| Tests                | Vitest 2                                 |
-| Lint                 | ESLint 9 flat config + typescript-eslint |
-| Format               | Prettier 3                               |
-| Versioning           | Changesets                               |
-| Capture engine       | Playwright (Chromium only for v1)        |
-| Docs site            | Astro Starlight (Phase 6)                |
+| Layer                | Choice                                            |
+| -------------------- | ------------------------------------------------- |
+| Language             | TypeScript ^5.6 strict                            |
+| Package mgr          | pnpm 11 (workspaces)                              |
+| Bundler (core)       | tsup → ESM only                                   |
+| Bundler (web client) | Vite 5                                            |
+| Runtime (web server) | Express 5 + tsx (dev) / tsc (prod)                |
+| Tests                | Vitest 2                                          |
+| Lint                 | ESLint 9 flat config + typescript-eslint          |
+| Format               | Prettier 3                                        |
+| Versioning           | Changesets                                        |
+| Capture engine       | Playwright (Chromium only for v1)                 |
+| Docs site            | Plain markdown under `docs/` (rendered on GitHub) |
 
 ## v1 Phase Status
 
 Tracked in `.claude/plans/shotcraft-v1.md`. Brief:
 
-| Phase | Status     | Description                                                                                                                              |
-| ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | ✅ Done    | Repo skeleton — pnpm workspaces, tsconfig, eslint, prettier, vitest, changesets, GH workflows, MIT license, README                       |
-| 2     | ⏳ Next    | Port BudgetBug's capture engine into `packages/core/src/capture/`, generalize for arbitrary targets, wire `shotcraft capture` subcommand |
-| 3     | Pending    | Render engine + first template (`@shotcraft/template-app-store-iphone`) end-to-end with 3D-perspective device frame                      |
-| 4     | Pending    | Templates 2-6 (app-store-ipad, play-store-phone, play-store-tablet, readme-hero, social-og-card)                                         |
-| 5     | Pending    | `examples/budgetbug/shotcraft.config.ts` driving the real BudgetBug capture set end-to-end                                               |
-| 6     | Pending    | Astro Starlight docs site (gallery, getting-started, API reference, contributing)                                                        |
-| 7     | Pending    | npm publish flow + polish (Changesets-driven release, demo GIFs, eat-own-dogfood README hero)                                            |
-| 8     | 🟡 Partial | Hosted companion (`@shotcraft/web`) scaffolded; templates gallery + config builder + live-demo implementation pending                    |
+| Phase | Status  | Description                                                                                                                                                                                   |
+| ----- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | ✅ Done | Repo skeleton — pnpm workspaces, tsconfig, eslint, prettier, vitest, changesets, GH workflows, MIT license, README                                                                            |
+| 2     | ✅ Done | Capture engine in `packages/core/src/capture/`, generalized for arbitrary targets, `shotcraft capture` subcommand                                                                             |
+| 3     | ✅ Done | Render engine + first template (`@shotcraft/template-app-store-iphone`) end-to-end                                                                                                            |
+| 4     | ✅ Done | Templates 2-7: app-store-ipad, play-store-phone, play-store-tablet, readme-hero, social-og-card, desktop-hero                                                                                 |
+| 5     | ✅ Done | `examples/budgetbug/shotcraft.config.ts` driving the real BudgetBug capture set end-to-end                                                                                                    |
+| 6     | ✅ Done | Plain-markdown docs under `docs/` (rendered on GitHub) — Astro Starlight scrapped in favor of native rendering                                                                                |
+| 7     | ✅ Done | npm publish plumbing — Changesets + GitHub Actions + provenance — awaiting operator-side `@shotcraft` scope registration                                                                      |
+| 8     | ✅ Done | Hosted companion (`@shotcraft/web`) live at shotcraft.bfgsolutions.net — templates gallery, config builder, Crawler, NDJSON-streamed Discover with live phase timeline, auto-detect form auth |
 
 ## CLI Subcommand Surface
 
-All implemented as `shotcraft <subcommand>` from `packages/core/src/cli/index.ts`. Currently every subcommand is a "not implemented" stub pointing at the plan; they fill in across phases 2-8.
+All implemented as `shotcraft <subcommand>` from `packages/core/src/cli/index.ts`.
 
 | Command                 | Phase landed | Behaviour                                                                 |
 | ----------------------- | ------------ | ------------------------------------------------------------------------- |

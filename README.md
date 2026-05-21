@@ -41,8 +41,7 @@ upload to App Store Connect, drop into your README, or post on Twitter.
 
 **Try the gallery + config builder today** without installing anything —
 the hosted companion is live at
-[shotcraft-web.azurewebsites.net](https://shotcraft-web.azurewebsites.net)
-(custom domain pending).
+[shotcraft.bfgsolutions.net](https://shotcraft.bfgsolutions.net).
 
 ## What sets it apart
 
@@ -63,16 +62,17 @@ the hosted companion is live at
 
 ## First-party templates
 
-Six templates ship in v0.1, covering the full OSS-developer lifecycle:
+Seven templates ship today, covering the full OSS-developer lifecycle:
 
-| Template                                | Output (px) | Use case                                    |
-| --------------------------------------- | ----------- | ------------------------------------------- |
-| `@shotcraft/template-app-store-iphone`  | 1284 × 2778 | Apple App Store iPhone 6.5" (required tier) |
-| `@shotcraft/template-app-store-ipad`    | 2064 × 2752 | Apple App Store iPad 13" (required tier)    |
-| `@shotcraft/template-play-store-phone`  | 1080 × 1920 | Google Play phone screenshot                |
-| `@shotcraft/template-play-store-tablet` | 1920 × 1200 | Google Play 7" tablet (landscape)           |
-| `@shotcraft/template-readme-hero`       | 1280 × 640  | GitHub README hero (`<picture>`-ready)      |
-| `@shotcraft/template-social-og-card`    | 1200 × 630  | Open Graph / Twitter card                   |
+| Template                                | Output (px) | Use case                                                |
+| --------------------------------------- | ----------- | ------------------------------------------------------- |
+| `@shotcraft/template-app-store-iphone`  | 1284 × 2778 | Apple App Store iPhone 6.5" (required tier)             |
+| `@shotcraft/template-app-store-ipad`    | 2064 × 2752 | Apple App Store iPad 13" (required tier)                |
+| `@shotcraft/template-play-store-phone`  | 1080 × 1920 | Google Play phone screenshot                            |
+| `@shotcraft/template-play-store-tablet` | 1920 × 1200 | Google Play 7" tablet (landscape)                       |
+| `@shotcraft/template-readme-hero`       | 1280 × 640  | GitHub README hero (`<picture>`-ready)                  |
+| `@shotcraft/template-social-og-card`    | 1200 × 630  | Open Graph / Twitter card                               |
+| `@shotcraft/template-desktop-hero`      | 1920 × 1080 | Desktop browser-chrome hero (README, landing pages, OG) |
 
 Visual previews: [`docs/templates.md`](./docs/templates.md).
 
@@ -116,7 +116,7 @@ export default defineConfig({
 pnpm shotcraft           # 3 screens × 4 templates × ~2 themes = 24 PNGs
 ```
 
-A real config consuming all six templates lives at
+A real config consuming all seven templates lives at
 [`examples/budgetbug/`](./examples/budgetbug) — it's the canonical demo
 against the BudgetBug app.
 
@@ -134,7 +134,7 @@ Plain markdown under [`docs/`](./docs) — GitHub renders it natively:
 
 Need an interactive sandbox? The hosted companion ships a templates
 gallery and a config builder at
-[shotcraft-web.azurewebsites.net](https://shotcraft-web.azurewebsites.net).
+[shotcraft.bfgsolutions.net](https://shotcraft.bfgsolutions.net).
 
 ## Repo layout
 
@@ -148,6 +148,7 @@ shotcraft/
 │   ├── template-play-store-tablet/
 │   ├── template-readme-hero/
 │   ├── template-social-og-card/
+│   ├── template-desktop-hero/
 │   └── web/                           → npm: @shotcraft/web (hosted companion site)
 ├── examples/
 │   ├── budgetbug/                     # canonical real-world demo
@@ -185,7 +186,7 @@ PRs welcome — keep them focused, include a test, and add a
 landed:
 
 - Capture engine + render engine (`shotcraft` CLI + programmatic API)
-- Six first-party template packages, each with sample composites
+- Seven first-party template packages, each with sample composites
 - BudgetBug example + eat-our-own-dogfood example (the README hero
   above)
 - Plain-markdown docs in [`docs/`](./docs) — rendered on GitHub

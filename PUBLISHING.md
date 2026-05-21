@@ -143,6 +143,7 @@ against the queued v0.1 changesets produces:
 | `@shotcraft/template-play-store-tablet` | minor + patch       | 1.0.0   |
 | `@shotcraft/template-readme-hero`       | minor + patch       | 1.0.0   |
 | `@shotcraft/template-social-og-card`    | minor + patch       | 1.0.0   |
+| `@shotcraft/template-desktop-hero`      | minor + patch       | 1.0.0   |
 
 The templates land at 1.0.0 because Changesets treats packages
 previously at `0.0.0` as "unreleased" and bumps them past 0.x on the

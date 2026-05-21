@@ -33,7 +33,15 @@ self-contained — fill in, click through, scroll down.
 - **Target-app login (optional)** — same picker as the Live demo:
   - **none** — public app, no auth
   - **api** — JSON POST to `/api/auth/login`
-  - **form** — fills an HTML form and clicks submit
+  - **form** — fills an HTML form and clicks submit. **Leave
+    Email/username blank for password-only sites** (single-user
+    instances where the username is implicit) — the engine
+    auto-detects no email field and skips that step. The form-auth
+    handler also auto-clicks "Use password instead" / "Sign in with
+    password" / "Continue with password" reveal links when the
+    initial page shows passkey-only or a hidden form (matches
+    `/(use|sign in with|continue with)?\s*password( instead)?/i` on
+    visible `<a>`/`<button>`/`[role=button|link]` elements).
   - **session** — pre-injected cookies / localStorage
 
 ### 2. Screens
@@ -42,21 +50,41 @@ A card per screen you want to capture. Two ways to populate the list:
 
 #### Auto-discover
 
-Click **🔍 Discover routes**. The server crawls the target same-origin
-(BFS, depth 2, max 25 pages, 60s deadline) — running your configured
-login first if you set one. Discovered paths come back as a checklist
-with each page's `<title>`. Tick the ones you want and click **Add as
+Click **🔍 Discover routes**. The server logs into the target (if you
+configured auth), then runs four discovery techniques in series and
+merges the results:
+
+| Technique         | What it does                                                                                                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **sitemap**       | Fetches `/sitemap.xml` through the page's auth context and extracts same-origin `<loc>` entries.                                                                                                                                                                                                 |
+| **common-routes** | Probes a short list of common SPA paths (`/`, `/login`, `/dashboard`, etc.) and keeps the ones that 200.                                                                                                                                                                                         |
+| **link-crawl**    | Anchor-link BFS from the post-auth start URL. Same-origin only. Depth 2, max 25 pages.                                                                                                                                                                                                           |
+| **nav-click**     | Scans `<a>`/`<button>` elements inside `<nav>`/`<aside>`/`.sidebar`/`[role=navigation]`/`[data-testid*=nav]` containers — anchor hrefs are harvested directly; visible buttons are clicked and the resulting URL is recorded. Catches React-Router `<Link>` sidebars and `<button onClick>` nav. |
+
+The whole flow runs under a single 60-second deadline. Discovered
+paths come back as a checklist with each page's `<title>` and the
+technique that found it. Tick the ones you want and click **Add as
 screens** — they merge into the screens list (skipping any already
 present).
 
-This finds anything reachable via `<a href>` link-following. It does
-**not** find:
+##### Live phase timeline
 
-- Routes only reached via button clicks / state changes (use a screen
-  with `actions`)
-- Modal / drawer states (not URLs at all — use `actions`)
+While the engine works, the Discover panel shows what it's actually
+doing — current phase + a collapsible timeline of every step (auth
+form fill, "Use password instead" reveal, page-ready races, each
+technique's start/done, content-wait results). On failure the same
+timeline stays visible so you can see exactly where it got stuck
+instead of guessing from the error message alone. The timeline is
+also there in the post-success view (collapsed by default) as
+diagnostic history.
+
+##### What discovery still misses
+
+- Routes only reached via button clicks / state changes that don't
+  live in a nav container (use a screen with `actions`).
+- Modal / drawer states (not URLs at all — use `actions`).
 - Dynamic-id routes like `/budgets/[id]/edit` where you need a
-  specific record
+  specific record.
 
 For those, fall back to manually adding screens.
 

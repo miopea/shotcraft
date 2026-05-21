@@ -3,7 +3,7 @@
 Visual previews of every first-party Shotcraft template, rendered
 against a real app.
 
-Six first-party templates ship today. Each is its own npm package —
+Seven first-party templates ship today. Each is its own npm package —
 install only the ones you need. The previews below were rendered by
 Shotcraft itself against the [BudgetBug](https://budgetbug.live) example
 app. Source for each template is in
@@ -70,6 +70,22 @@ composites so you can swap with `<picture>` and `prefers-color-scheme`:
 | Dark                                                                               | Light                                                                                |
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | ![README hero dark sample](../packages/template-readme-hero/samples/hero-dark.png) | ![README hero light sample](../packages/template-readme-hero/samples/hero-light.png) |
+
+## Desktop hero
+
+Desktop browser-chrome hero — for README hero images, landing-page
+screenshots, blog posts, and OG images that need a real desktop
+viewport (not a phone frame). Captures at **1440 × 900 @ dpr 2** with
+`isMobile: false`, so you get the target's desktop layout instead of
+its mobile breakpoint. Composited inside a minimal browser-chrome
+window (rounded corners, soft drop shadow, three traffic-light dots
+in the top bar). Pure CSS chrome — no SVG to maintain.
+
+`@shotcraft/template-desktop-hero` · 1920 × 1080 · dark + light
+
+| Dark                                                                                 | Light                                                                                  |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| ![Desktop hero dark sample](../packages/template-desktop-hero/samples/hero-dark.png) | ![Desktop hero light sample](../packages/template-desktop-hero/samples/hero-light.png) |
 
 ## Open Graph / Twitter card
 
