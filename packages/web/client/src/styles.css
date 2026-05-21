@@ -1103,10 +1103,88 @@ label {
 
 .discover-panel-running {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: 0.5rem;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+.discover-running-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Live phase view — what the engine is currently doing + collapsible
+   full timeline. Makes "Crawling…" actually troubleshoot-able. */
+.discover-phase-live {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-left: 1.5rem;
+}
+
+.discover-phase-current {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.discover-phase-current code {
+  background: var(--bg-input, rgba(255, 255, 255, 0.05));
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.discover-phase-current-t {
+  opacity: 0.7;
+}
+
+.discover-phase-timeline {
+  font-size: 0.8rem;
+}
+
+.discover-phase-timeline summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0.15rem 0;
+}
+
+.discover-phase-timeline ul {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0 0 0 0.5rem;
+  max-height: 16rem;
+  overflow: auto;
+  border-left: 2px solid var(--border);
+}
+
+.discover-phase-row {
+  display: grid;
+  grid-template-columns: 4rem minmax(8rem, 14rem) 1fr;
+  gap: 0.5rem;
+  padding: 0.1rem 0.35rem;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+.discover-phase-t {
+  color: var(--text-muted);
+  opacity: 0.75;
+  text-align: right;
+}
+
+.discover-phase-name {
+  color: var(--text);
+}
+
+.discover-phase-data {
+  color: var(--text-muted);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .discover-spinner {

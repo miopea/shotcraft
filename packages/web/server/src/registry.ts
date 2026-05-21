@@ -152,4 +152,26 @@ export const TEMPLATE_REGISTRY: ReadonlyArray<TemplateInfo> = [
       },
     ],
   },
+  {
+    id: "desktop-hero",
+    pkg: "@shotcraft/template-desktop-hero",
+    displayName: "Desktop hero (1920×1080)",
+    category: "readme",
+    viewport: { width: 1440, height: 900, dpr: 2 },
+    output: { width: 1920, height: 1080 },
+    isMobile: false,
+    themes: ["dark", "light"],
+    samples: [
+      {
+        theme: "dark",
+        url: "/samples/desktop-hero/hero-dark.png",
+        filename: "hero-dark.png",
+      },
+      {
+        theme: "light",
+        url: "/samples/desktop-hero/hero-light.png",
+        filename: "hero-light.png",
+      },
+    ],
+  },
 ];

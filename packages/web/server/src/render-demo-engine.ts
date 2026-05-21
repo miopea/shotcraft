@@ -15,6 +15,7 @@
  *     to stop SSRF against the host's internal network.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -137,10 +138,45 @@ const STEALTH_INIT_SCRIPT = `
  * issue is downstream).
  */
 const ENGINE_START = Date.now();
+
+/**
+ * One phase event — what `engineLog` emits. Routes that want live
+ * troubleshooting visibility can install a per-request emitter via
+ * `runWithPhaseEmitter` so these events stream back to the client
+ * (e.g. /api/discover's NDJSON response) instead of disappearing into
+ * App Service stdout.
+ */
+export interface PhaseEvent {
+  phase: string;
+  t_ms: number;
+  data?: Record<string, unknown>;
+}
+export type PhaseEmitter = (event: PhaseEvent) => void;
+
+const phaseEmitterStore = new AsyncLocalStorage<PhaseEmitter>();
+
+/**
+ * Run `fn` with a per-request phase emitter attached. Any `engineLog`
+ * call inside (or in any async descendant) fires `emit` in addition
+ * to writing to stdout. AsyncLocalStorage propagates through awaits
+ * without us threading the emitter through every signature.
+ */
+export async function runWithPhaseEmitter<T>(emit: PhaseEmitter, fn: () => Promise<T>): Promise<T> {
+  return phaseEmitterStore.run(emit, fn);
+}
+
 function engineLog(phase: string, data?: Record<string, unknown>): void {
   const elapsed = Date.now() - ENGINE_START;
   const payload = data ? ` ${JSON.stringify(data)}` : "";
   process.stdout.write(`[shotcraft-engine][+${elapsed}ms][${phase}]${payload}\n`);
+  const emit = phaseEmitterStore.getStore();
+  if (emit) {
+    try {
+      emit(data ? { phase, t_ms: elapsed, data } : { phase, t_ms: elapsed });
+    } catch {
+      /* never let emitter errors break the engine */
+    }
+  }
 }
 
 /**

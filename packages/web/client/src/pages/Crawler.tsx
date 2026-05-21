@@ -162,15 +162,27 @@ interface DiscoverSummary {
   finalScreenshot?: string;
 }
 
+interface DiscoverPhase {
+  phase: string;
+  t_ms: number;
+  data?: Record<string, unknown>;
+}
+
 type DiscoverState =
   | { status: "idle" }
-  | { status: "running" }
-  | { status: "error"; message: string; errorScreenshot?: string }
+  | { status: "running"; phases: ReadonlyArray<DiscoverPhase> }
+  | {
+      status: "error";
+      message: string;
+      errorScreenshot?: string;
+      phases: ReadonlyArray<DiscoverPhase>;
+    }
   | {
       status: "ready";
       routes: ReadonlyArray<DiscoveredRoute>;
       selected: Set<string>;
       summary?: DiscoverSummary;
+      phases: ReadonlyArray<DiscoverPhase>;
     };
 
 function rid(): string {
@@ -476,7 +488,8 @@ export function Crawler() {
   };
 
   const runDiscover = async (): Promise<void> => {
-    setDiscoverState({ status: "running" });
+    const phases: DiscoverPhase[] = [];
+    setDiscoverState({ status: "running", phases: [] });
     try {
       let authPayload: Record<string, unknown> | null = null;
       try {
@@ -498,7 +511,9 @@ export function Crawler() {
           ...(setupActions !== undefined ? { setupActions } : {}),
         }),
       });
-      if (!res.ok) {
+      // Pre-stream errors come back as plain JSON (e.g. 401/403/400).
+      const contentType = res.headers.get("Content-Type") ?? "";
+      if (!res.ok && !contentType.includes("ndjson")) {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
           errorScreenshot?: string;
@@ -511,20 +526,94 @@ export function Crawler() {
         }
         throw e;
       }
-      const data = (await res.json()) as {
-        routes: DiscoveredRoute[];
-        summary?: DiscoverSummary;
+
+      // Stream NDJSON. Each line is a phase event or a final
+      // {done:true,...} sentinel. Buffer partials across chunks.
+      // Outcomes live inside an `outcome` box so TS doesn't narrow the
+      // outer-scope variables to `never` after the closure assigns
+      // them (it can't track closure mutations across awaits).
+      if (!res.body) throw new Error("Discover response has no body to stream.");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      type FinalResult = { routes: DiscoveredRoute[]; summary?: DiscoverSummary };
+      type FinalError = { message: string; errorScreenshot?: string };
+      const outcome: { result?: FinalResult; error?: FinalError } = {};
+
+      const handleLine = (raw: string): void => {
+        const line = raw.trim();
+        if (!line) return;
+        let obj: unknown;
+        try {
+          obj = JSON.parse(line);
+        } catch {
+          // Malformed line — keep going; engine doesn't emit these
+          // intentionally, but better to ignore than abort the stream.
+          return;
+        }
+        if (obj && typeof obj === "object") {
+          const o = obj as Record<string, unknown>;
+          if (o.done === true) {
+            if (typeof o.error === "string") {
+              outcome.error = {
+                message: o.error,
+                ...(typeof o.errorScreenshot === "string"
+                  ? { errorScreenshot: o.errorScreenshot }
+                  : {}),
+              };
+            } else if (o.result && typeof o.result === "object") {
+              outcome.result = o.result as FinalResult;
+            }
+            return;
+          }
+          if (typeof o.phase === "string" && typeof o.t_ms === "number") {
+            const evt: DiscoverPhase = {
+              phase: o.phase,
+              t_ms: o.t_ms,
+              ...(o.data && typeof o.data === "object"
+                ? { data: o.data as Record<string, unknown> }
+                : {}),
+            };
+            phases.push(evt);
+            setDiscoverState({ status: "running", phases: [...phases] });
+          }
+        }
       };
+
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx = buf.indexOf("\n");
+        while (idx !== -1) {
+          handleLine(buf.slice(0, idx));
+          buf = buf.slice(idx + 1);
+          idx = buf.indexOf("\n");
+        }
+      }
+      // Flush any trailing line without a newline.
+      if (buf.length > 0) handleLine(buf);
+
+      if (outcome.error) {
+        const e = new Error(outcome.error.message) as Error & { errorScreenshot?: string };
+        if (outcome.error.errorScreenshot) e.errorScreenshot = outcome.error.errorScreenshot;
+        throw e;
+      }
+      if (!outcome.result) {
+        throw new Error("Discover stream ended without a result.");
+      }
+      const result = outcome.result;
       const existing = new Set(screens.map((s) => normalizeRoute(s.route)));
       const selected = new Set<string>();
-      for (const r of data.routes) {
+      for (const r of result.routes) {
         if (!existing.has(normalizeRoute(r.path))) selected.add(r.path);
       }
       setDiscoverState({
         status: "ready",
-        routes: data.routes,
+        routes: result.routes,
         selected,
-        ...(data.summary ? { summary: data.summary } : {}),
+        phases,
+        ...(result.summary ? { summary: result.summary } : {}),
       });
     } catch (err) {
       const screenshot =
@@ -534,6 +623,7 @@ export function Crawler() {
       setDiscoverState({
         status: "error",
         message: err instanceof Error ? err.message : String(err),
+        phases,
         ...(screenshot ? { errorScreenshot: screenshot } : {}),
       });
     }
@@ -549,6 +639,7 @@ export function Crawler() {
         status: "ready",
         routes: prev.routes,
         selected: next,
+        phases: prev.phases,
         ...(prev.summary ? { summary: prev.summary } : {}),
       };
     });
@@ -563,6 +654,7 @@ export function Crawler() {
         status: "ready",
         routes: prev.routes,
         selected: next,
+        phases: prev.phases,
         ...(prev.summary ? { summary: prev.summary } : {}),
       };
     });
@@ -1888,8 +1980,11 @@ function DiscoverPanel({
   if (state.status === "running") {
     return (
       <div className="discover-panel discover-panel-running" role="status">
-        <span className="discover-spinner" aria-hidden="true" />
-        Crawling… (one page at a time, 60s budget)
+        <div className="discover-running-header">
+          <span className="discover-spinner" aria-hidden="true" />
+          Crawling… (one page at a time, 60s budget)
+        </div>
+        <PhaseTimeline phases={state.phases} live />
       </div>
     );
   }
@@ -1919,6 +2014,7 @@ function DiscoverPanel({
             <figcaption>Page state at failure (live screenshot from the engine).</figcaption>
           </figure>
         )}
+        <PhaseTimeline phases={state.phases} />
       </div>
     );
   }
@@ -2015,7 +2111,66 @@ function DiscoverPanel({
           />
         </details>
       )}
+      <PhaseTimeline phases={state.phases} />
     </div>
+  );
+}
+
+/**
+ * Live phase timeline — shows what the engine is doing while
+ * discovery runs (and what it did after). Each phase is the
+ * `engineLog(name, data)` call from render-demo-engine.ts streamed
+ * over NDJSON. `live` mode auto-scrolls to the newest entry so the
+ * operator sees motion; the post-mortem mode (success / failure
+ * states) starts collapsed in a `<details>` so it doesn't dominate
+ * the panel but is right there for troubleshooting.
+ */
+function PhaseTimeline({
+  phases,
+  live = false,
+}: {
+  phases: ReadonlyArray<DiscoverPhase>;
+  live?: boolean;
+}): JSX.Element | null {
+  if (phases.length === 0 && !live) return null;
+  const rows = phases.map((p, i) => (
+    <li key={`${p.t_ms}-${i}-${p.phase}`} className="discover-phase-row">
+      <span className="discover-phase-t">+{(p.t_ms / 1000).toFixed(2)}s</span>
+      <span className="discover-phase-name">{p.phase}</span>
+      {p.data && Object.keys(p.data).length > 0 && (
+        <span className="discover-phase-data">{JSON.stringify(p.data)}</span>
+      )}
+    </li>
+  ));
+  if (live) {
+    const last = phases[phases.length - 1];
+    return (
+      <div className="discover-phase-live">
+        <div className="discover-phase-current">
+          {last ? (
+            <>
+              <span className="discover-phase-current-label">Current:</span>{" "}
+              <code>{last.phase}</code>{" "}
+              <span className="discover-phase-current-t">({(last.t_ms / 1000).toFixed(2)}s)</span>
+            </>
+          ) : (
+            <span className="discover-phase-current-label">Waiting for engine to start…</span>
+          )}
+        </div>
+        {phases.length > 0 && (
+          <details className="discover-phase-timeline">
+            <summary>Engine timeline ({phases.length})</summary>
+            <ul>{rows}</ul>
+          </details>
+        )}
+      </div>
+    );
+  }
+  return (
+    <details className="discover-phase-timeline">
+      <summary>Engine timeline ({phases.length})</summary>
+      <ul>{rows}</ul>
+    </details>
   );
 }
 

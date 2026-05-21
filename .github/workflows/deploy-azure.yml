@@ -70,7 +70,7 @@ jobs:
           # live-demo render path can find them at runtime. Frames dir is
           # optional (the OG-card template doesn't ship its own SVG —
           # though it does have a copy of the iPhone frame).
-          for tpl in app-store-iphone app-store-ipad play-store-phone play-store-tablet readme-hero social-og-card; do
+          for tpl in app-store-iphone app-store-ipad play-store-phone play-store-tablet readme-hero social-og-card desktop-hero; do
             mkdir -p "$DEPLOY/templates/$tpl"
             cp "packages/template-$tpl/wrapper.html" "$DEPLOY/templates/$tpl/wrapper.html"
             cp "packages/template-$tpl/wrapper.css" "$DEPLOY/templates/$tpl/wrapper.css"
