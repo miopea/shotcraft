@@ -48,6 +48,22 @@ export type RenderDemoAuth =
       submitButton: string;
       email: string;
       password: string;
+      /**
+       * Skip the email/username field entirely. Use for sites with
+       * password-only auth (e.g. single-user instances where the
+       * username is implicit, like your-app.example.com). When true,
+       * `emailField` and `email` are ignored; only `password` /
+       * `passwordField` / `submitButton` are required.
+       */
+      passwordOnly?: boolean;
+      /**
+       * Actions to run on the login page BEFORE the form is filled —
+       * use to reveal a hidden form (e.g. click a "Use password
+       * instead" link) or dismiss a "Sign in with Passkey" prompt.
+       * Same ScreenAction shape as per-screen actions; capped by
+       * MAX_ACTIONS.
+       */
+      preFormActions?: ReadonlyArray<ScreenAction>;
       waitForUrl?: string;
       waitForSelector?: string;
     }
@@ -161,11 +177,15 @@ function authCacheKey(auth: RenderDemoAuth, targetUrl: string): string {
   h.update(origin);
   h.update("|");
   if (auth.type === "form") {
-    h.update(auth.email);
+    h.update(auth.email ?? "");
     h.update("|");
     h.update(auth.password);
     h.update("|");
     h.update(auth.url);
+    h.update("|");
+    h.update(auth.passwordOnly ? "1" : "0");
+    h.update("|");
+    h.update(auth.preFormActions ? JSON.stringify(auth.preFormActions) : "");
   } else if (auth.type === "api") {
     h.update(auth.url);
     h.update("|");
@@ -949,12 +969,15 @@ function validateAuth(auth: unknown): RenderDemoFailure | null {
     return null;
   }
   if (a.type === "form") {
+    // `email` is now optional — auto-detect handles password-only forms
+    // (e.g. single-user instances where the username is implicit). If
+    // the site DOES have an email/username field, supply `email`; if
+    // not, leave it blank.
     for (const field of [
       "url",
       "emailField",
       "passwordField",
       "submitButton",
-      "email",
       "password",
     ] as const) {
       const value = a[field];
@@ -965,6 +988,9 @@ function validateAuth(auth: unknown): RenderDemoFailure | null {
           error: `\`auth.${field}\` is required for type=form.`,
         };
       }
+    }
+    if (a.email !== undefined && typeof a.email !== "string") {
+      return { ok: false, status: 400, error: "`auth.email` must be a string when provided." };
     }
     return null;
   }
@@ -1048,7 +1074,96 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
     const formUrl = new URL(auth.url, origin).toString();
     await page.goto(formUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
     engineLog("auth.form.login-page-loaded", await pageSnapshot(page));
-    await fillFirstMatch(page, "email", auth.emailField, auth.email, EMAIL_FALLBACK_SELECTORS);
+
+    // Explicit operator-supplied pre-form actions (escape hatch — not
+    // normally needed thanks to the auto-reveal below).
+    if (auth.preFormActions && auth.preFormActions.length > 0) {
+      try {
+        await runActions(page, auth.preFormActions);
+        engineLog("auth.form.preFormActions-done");
+      } catch (err) {
+        throw new Error(
+          `auth (form): preFormActions failed: ${err instanceof Error ? err.message : String(err)}`,
+          { cause: err },
+        );
+      }
+    }
+
+    // Auto-reveal: if no visible password field exists, scan for a
+    // "Use password instead" / "Sign in with password" / "Continue
+    // with password" link or button and click it. Covers split auth
+    // pages (passkey primary + password fallback link — Swarm,
+    // GitHub, many modern signin UIs).
+    const hasVisiblePassword = async (): Promise<boolean> =>
+      page
+        .locator('input[type="password"]')
+        .first()
+        .isVisible({ timeout: 250 })
+        .catch(() => false);
+    if (!(await hasVisiblePassword())) {
+      const revealed = await page
+        .evaluate(
+          `(() => {
+            const re = /(use|sign[- ]?in with|continue with)?\\s*password( instead)?/i;
+            // Scan visible <a> and <button> for password-reveal text.
+            const candidates = Array.from(
+              document.querySelectorAll('a, button, [role="button"], [role="link"]'),
+            );
+            for (const el of candidates) {
+              if (!(el instanceof HTMLElement)) continue;
+              if (el.offsetParent === null) continue;
+              const text = (el.textContent || '').trim();
+              if (!text || text.length > 60) continue;
+              if (!re.test(text)) continue;
+              el.click();
+              return text;
+            }
+            return null;
+          })()`,
+        )
+        .catch(() => null);
+      if (revealed) {
+        engineLog("auth.form.auto-reveal-clicked", { label: revealed });
+        // Wait briefly for the password field to mount.
+        await page
+          .locator('input[type="password"]')
+          .first()
+          .waitFor({ state: "visible", timeout: 5_000 })
+          .catch(() => undefined);
+      }
+    }
+
+    // Auto-detect password-only: skip the email step if the operator
+    // marked passwordOnly explicitly, OR didn't supply an email value,
+    // OR no visible email-like field exists on the page. Covers single-
+    // user instances (Swarm) and any login where the username is
+    // implicit. Existing email selectors are tried only when we DO
+    // expect to fill one.
+    const hasVisibleEmailField = async (): Promise<boolean> => {
+      const sel = [auth.emailField, ...EMAIL_FALLBACK_SELECTORS].join(", ");
+      return page
+        .locator(sel)
+        .first()
+        .isVisible({ timeout: 250 })
+        .catch(() => false);
+    };
+    const skipEmail =
+      auth.passwordOnly === true ||
+      !auth.email ||
+      auth.email.length === 0 ||
+      !(await hasVisibleEmailField());
+    if (!skipEmail) {
+      await fillFirstMatch(page, "email", auth.emailField, auth.email, EMAIL_FALLBACK_SELECTORS);
+    } else {
+      engineLog("auth.form.email-skipped", {
+        reason:
+          auth.passwordOnly === true
+            ? "passwordOnly"
+            : !auth.email
+              ? "no-email-provided"
+              : "no-visible-email-field",
+      });
+    }
     await fillFirstMatch(
       page,
       "password",
@@ -1056,7 +1171,7 @@ async function runTargetAuth(page: Page, captureUrl: string, auth: RenderDemoAut
       auth.password,
       PASSWORD_FALLBACK_SELECTORS,
     );
-    engineLog("auth.form.fields-filled");
+    engineLog("auth.form.fields-filled", { skippedEmail: skipEmail });
     await clickFirstMatch(page, "submit", auth.submitButton, SUBMIT_FALLBACK_SELECTORS);
     engineLog("auth.form.submit-clicked");
 

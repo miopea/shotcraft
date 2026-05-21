@@ -1537,13 +1537,14 @@ function AuthFieldset({ auth, update, disabled }: AuthFieldsetProps) {
             />
           </div>
           <div className="field">
-            <label>Email / username</label>
+            <label>Email / username (leave blank for password-only sites)</label>
             <input
               type="text"
               value={auth.email}
               onChange={(e) => update("email", e.target.value)}
               disabled={disabled}
               autoComplete="username"
+              placeholder="(optional — auto-detected)"
             />
           </div>
           <div className="field">
