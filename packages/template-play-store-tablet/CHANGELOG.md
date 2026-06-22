@@ -1,5 +1,11 @@
 # @shotcraft/template-play-store-tablet
 
+## 1.0.2
+
+### Patch Changes
+
+- Add the Shotcraft logo to each template's package README (npm landing page).
+
 ## 1.0.1
 
 ### Patch Changes

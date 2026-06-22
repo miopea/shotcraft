@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/miopea/shotcraft/main/assets/logo/shotcraft-icon-240.png" alt="Shotcraft" width="96" height="96" />
+</p>
+
 # @shotcraft/template-desktop-hero
 
 Shotcraft template — **Desktop hero**. Composes a desktop-viewport screen

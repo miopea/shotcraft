@@ -1,5 +1,11 @@
 # @shotcraft/template-app-store-iphone
 
+## 1.1.2
+
+### Patch Changes
+
+- Add the Shotcraft logo to each template's package README (npm landing page).
+
 ## 1.1.1
 
 ### Patch Changes
