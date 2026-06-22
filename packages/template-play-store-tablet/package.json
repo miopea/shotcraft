@@ -1,6 +1,6 @@
 {
   "name": "@shotcraft/template-play-store-tablet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Shotcraft template — Google Play 7\" tablet screenshot composite. 1920×1200 landscape, two-pane layout, Android tablet frame.",
   "keywords": [
     "shotcraft",

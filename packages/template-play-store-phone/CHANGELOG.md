@@ -1,5 +1,13 @@
 # @shotcraft/template-play-store-phone
 
+## 1.0.1
+
+### Patch Changes
+
+- 8e674a5: Point each template package `homepage` at the GitHub repo (the unbought `shotcraft.dev` domain was removed).
+- Updated dependencies [8e674a5]
+  - shotcraft@0.1.1
+
 ## 1.0.0
 
 ### Minor Changes

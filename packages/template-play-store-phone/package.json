@@ -1,6 +1,6 @@
 {
   "name": "@shotcraft/template-play-store-phone",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Shotcraft template — Google Play phone screenshot composite. 1080×1920 with Pixel-shaped frame and Material-coded brand gradient.",
   "keywords": [
     "shotcraft",

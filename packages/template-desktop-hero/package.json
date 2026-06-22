@@ -1,6 +1,6 @@
 {
   "name": "@shotcraft/template-desktop-hero",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Shotcraft template — Desktop hero composite. 1920×1080 landscape, browser-chrome framed, dark + light variants. Good for README heroes, landing pages, blog posts, OG images.",
   "keywords": [
     "shotcraft",

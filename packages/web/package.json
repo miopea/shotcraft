@@ -1,6 +1,6 @@
 {
   "name": "@shotcraft/web",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "private": true,
   "description": "Shotcraft hosted companion — template gallery, interactive config builder, docs, and (in dev) a live-demo renderer. Deployable to Azure App Service or runnable locally via `shotcraft web`.",
   "homepage": "https://github.com/miopea/shotcraft",
