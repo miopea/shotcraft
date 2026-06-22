@@ -106,7 +106,7 @@ function parseArgs(argv: ReadonlyArray<string>): ParsedArgs {
 function notImplemented(name: string): never {
   process.stderr.write(
     `\nshotcraft ${name}: not implemented yet — lands in a later phase.\n` +
-      `See https://github.com/miopea/shotcraft/blob/main/.claude/plans/shotcraft-v1.md\n`,
+      `See https://github.com/miopea/shotcraft/tree/main/docs\n`,
   );
   process.exit(2);
 }
