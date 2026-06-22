@@ -73,6 +73,18 @@ the hosted companion is live at
 The wedge is the first row: every other tool starts _after_ you already
 have the screenshots. Shotcraft starts at your running app.
 
+## See it in action
+
+From your live app to shippable images — build a config, point it at your
+running app, capture, and render:
+
+![Shotcraft end-to-end flow — config, point at your app, capture + render, ship the composite](./assets/producthunt/flow-filmstrip.png)
+
+The hosted companion ships a templates gallery, an interactive config
+builder, a guided crawler, and a live demo:
+
+![Shotcraft templates gallery — seven first-party templates with real composites](./assets/screenshots/web-templates.png)
+
 ## First-party templates
 
 Seven templates ship today, covering the full OSS-developer lifecycle:
