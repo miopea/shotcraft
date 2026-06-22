@@ -340,7 +340,7 @@ not a primary plan, while the BFG/Azure setup is already paid for.
 | Prerequisite                          | Status               |
 | ------------------------------------- | -------------------- |
 | `@shotcraft` npm scope                | 🟡 Operator action   |
-| `miopea/shotcraft` GitHub repo    | 🟡 Operator action   |
+| `miopea/shotcraft` GitHub repo        | 🟡 Operator action   |
 | `NPM_TOKEN` GitHub secret             | 🟡 Operator action   |
 | `shotcraft.dev` domain                | 🟡 Operator action   |
 | `release.yml` workflow                | ✅ Wired             |
