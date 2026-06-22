@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/miopea/shotcraft/main/assets/logo/shotcraft-icon-240.png" alt="Shotcraft" width="120" height="120" />
+</p>
+
 # shotcraft
 
 > Capture your live app and ship App Store-ready screenshots, README hero images, and social cards in one command.

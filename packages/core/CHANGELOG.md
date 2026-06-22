@@ -1,5 +1,11 @@
 # shotcraft
 
+## 0.1.2
+
+### Patch Changes
+
+- Add the Shotcraft logo to the top of the package README (npm landing page).
+
 ## 0.1.1
 
 ### Patch Changes
