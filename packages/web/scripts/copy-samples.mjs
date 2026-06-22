@@ -25,6 +25,7 @@ const TEMPLATES = [
   { id: "play-store-tablet", pkg: "template-play-store-tablet" },
   { id: "readme-hero", pkg: "template-readme-hero" },
   { id: "social-og-card", pkg: "template-social-og-card" },
+  { id: "desktop-hero", pkg: "template-desktop-hero" },
 ];
 
 async function copyTemplate(template) {

@@ -176,14 +176,22 @@ packages into provenance, add to each package's `package.json`:
 without it, npm defaults to `restricted` (private) for scoped
 packages, and the publish fails.
 
-All seven publishable packages (`shotcraft` + the six
+All eight publishable packages (`shotcraft` + the seven
 `@shotcraft/template-*`) ship `publishConfig: { access: "public", provenance: true }`.
+`@shotcraft/web` is `private: true` — it is deployed, not published to npm.
 
 ## Azure deployment (current)
 
+> **Docs are plain markdown rendered on GitHub — there is NO separate
+> docs site to build or deploy.** Phase 6 scrapped the Astro/Starlight
+> docs site, so any `pnpm --filter @shotcraft/docs build` command and the
+> `shotcraft-docs` Static Web App below are **legacy** and can be
+> ignored. The only deployable surface is `@shotcraft/web` → App Service.
+> The companion is live at https://shotcraft.bfgsolutions.net.
+
 Both Azure surfaces are live in the operator's `bfg-solutions` resource
-group (eastus2). Free temporary URLs work today; `shotcraft.dev`
-custom domains land when the apex is purchased.
+group (eastus2). Free temporary URLs work today; a custom domain lands
+when the apex is purchased.
 
 | Resource             | Type                        | URL                                                    |
 | -------------------- | --------------------------- | ------------------------------------------------------ |

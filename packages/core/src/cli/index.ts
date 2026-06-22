@@ -39,10 +39,10 @@ SUBCOMMANDS
   init                    Scaffold a shotcraft.config.ts in the current directory
   capture                 Run only the capture phase
   render [template-id]    Run only the render phase, optionally for one template
-  dev                     Hot-reload preview for template authors
   web                     Launch the local web companion (gallery, config builder, live demo)
-  list                    List installed templates
   doctor                  Sanity-check config + target reachability
+  dev                     Hot-reload preview for template authors (coming soon)
+  list                    List installed templates (coming soon)
 
 OPTIONS
   -c, --config <path>     Path to a shotcraft.config.{ts,js} (default: search cwd)

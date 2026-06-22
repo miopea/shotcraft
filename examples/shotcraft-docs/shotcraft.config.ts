@@ -1,13 +1,15 @@
 /**
  * Shotcraft eat-our-own-dogfood demo.
  *
- * Drives the Shotcraft docs site (`@shotcraft/docs`, served on
- * http://localhost:4321 by `pnpm --filter @shotcraft/docs dev`) through
- * the README-hero and OG-card templates to produce the marketing assets
- * you see at the top of the project's GitHub repo.
+ * Drives the Shotcraft companion site (`@shotcraft/web`, live at
+ * https://shotcraft.bfgsolutions.net) through the README-hero and
+ * OG-card templates to produce the marketing assets you see at the top
+ * of the project's GitHub repo.
  *
  * Workflow:
- *   1. In one terminal: `pnpm --filter @shotcraft/docs dev`
+ *   1. (Optional) serve the companion locally for a fresh build:
+ *        `pnpm --filter @shotcraft/web dev`   # http://localhost:5174
+ *      …or just leave SHOTCRAFT_DOCS_URL unset to capture the live site.
  *   2. From this directory: `pnpm screenshots`
  *   3. Curated outputs land in `./screenshots/`; the polished ones get
  *      copied to `assets/readme/` at the repo root for the README.
@@ -15,28 +17,24 @@
 
 import { defineConfig } from "shotcraft";
 
-const TARGET = process.env.SHOTCRAFT_DOCS_URL ?? "http://localhost:4321";
+const TARGET = process.env.SHOTCRAFT_DOCS_URL ?? "https://shotcraft.bfgsolutions.net";
 
 export default defineConfig({
   target: TARGET,
 
   /**
-   * No auth — the docs site is fully public. We dismiss Astro's hydration
-   * helpers and the Starlight theme picker to avoid widget chrome in the
-   * captured screen.
+   * No auth — the companion site is fully public. We just let the page
+   * settle so the captured screen reads cleanly.
    */
   setup: async (page) => {
-    // Force the page-load to settle so the captured screen reads cleanly.
     await page.goto(TARGET, { waitUntil: "networkidle" });
   },
 
-  applyTheme: async (page, theme) => {
-    // Starlight respects a `data-theme` attribute on <html>. Set it
-    // explicitly so each theme captures cleanly even if the user's
-    // device / Playwright defaults disagree.
-    await page.evaluate((theme) => {
-      document.documentElement.dataset.theme = theme;
-    }, theme);
+  /**
+   * The companion ships a single (dark) theme, so we capture dark only.
+   */
+  defaults: {
+    themes: ["dark"],
   },
 
   screens: [

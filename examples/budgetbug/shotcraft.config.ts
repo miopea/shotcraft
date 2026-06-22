@@ -158,7 +158,7 @@ export default defineConfig({
   ],
 
   /**
-   * All six first-party templates. Capture runs once per (template ×
+   * All seven first-party templates. Capture runs once per (template ×
    * screen × theme); render composes each into its target dimensions.
    *
    * To run a subset (e.g. just App Store), comment templates out — the
@@ -171,6 +171,7 @@ export default defineConfig({
     "@shotcraft/template-play-store-tablet",
     "@shotcraft/template-readme-hero",
     "@shotcraft/template-social-og-card",
+    "@shotcraft/template-desktop-hero",
   ],
 
   outputDir: "./screenshots",

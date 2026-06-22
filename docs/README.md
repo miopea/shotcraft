@@ -29,7 +29,7 @@ step, no second source of truth to keep in sync.
 The hosted companion (`@shotcraft/web`) ships a templates gallery and
 an interactive config builder you can use without installing anything:
 
-> https://shotcraft-web.azurewebsites.net
+> https://shotcraft.bfgsolutions.net
 
 It also runs locally — `pnpm shotcraft web` after you've added Shotcraft
 to a project.

@@ -2,7 +2,8 @@
 
 Renders the marketing assets that ship at the top of the Shotcraft GitHub
 repo — the README hero and the Open Graph / Twitter card — by driving
-the [@shotcraft/docs](../../docs) site through Shotcraft itself.
+the live [Shotcraft companion site](https://shotcraft.bfgsolutions.net)
+(`@shotcraft/web`) through Shotcraft itself.
 
 This is the canonical proof-of-concept for the Shotcraft pitch: if the
 tool can produce its own marketing screenshots, you can trust it with
@@ -11,25 +12,29 @@ yours.
 ## Run
 
 ```bash
-# 1. Serve the docs site in one terminal
-pnpm --filter @shotcraft/docs dev
-
-# 2. From this directory, in another terminal
+# Capture the live companion site (no local server needed):
 pnpm screenshots
+
+# …or capture a local build first:
+pnpm --filter @shotcraft/web dev    # http://localhost:5174
+SHOTCRAFT_DOCS_URL=http://localhost:5174 pnpm screenshots
 ```
 
 Output lands at:
 
-- `./screenshots/readme-hero/01-landing-{dark,light}.png` — embed at the
-  top of the root README via `<picture>` + prefers-color-scheme
+- `./screenshots/readme-hero/01-landing-dark.png` — embed at the top of
+  the root README
 - `./screenshots/social-og-card/01-landing-dark.png` — embed via
   `<meta property="og:image">`
+
+The companion ships a single (dark) theme, so this example captures dark
+only.
 
 ## Curating to the repo
 
 Polished outputs are copied to `assets/readme/` at the repo root by hand
-once they look good. Re-run this example whenever the docs site visual
-changes.
+once they look good. Re-run this example whenever the companion site
+visual changes.
 
 ## Why this exists
 

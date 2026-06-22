@@ -130,6 +130,35 @@ pnpm shotcraft render
 When you change template options or add screens, re-run the full
 pipeline.
 
+## Troubleshooting
+
+**`browserType.launch: Executable doesn't exist`** — Playwright's
+Chromium isn't installed. Run `pnpm exec playwright install chromium`
+once, then re-run.
+
+**Login isn't applied / pages render logged-out** — your `setup(page)`
+ran but the session didn't stick. Confirm the request actually
+authenticates (watch with `--headed`), and that cookies/localStorage are
+set on the same origin as `target`. The `apiLogin` / `formLogin` /
+`injectSession` helpers in the [config reference](./config.md#auth-helpers)
+cover the common shapes.
+
+**Screenshots are blank or cut off** — the page hadn't finished
+rendering when the shot was taken. Add a `waitForSelector` (preferred) or
+a `waitMs` to the screen, so capture waits for the real content.
+
+**Stale or half-updated outputs** — `render` reuses existing raws by
+design. After changing screens, viewports, or auth, re-run the full
+`pnpm shotcraft` (capture + render), not just `render`.
+
+**An overlay/banner is in every shot** — dismiss it inside `setup(page)`
+(e.g. set the localStorage flag your app checks, or click the close
+button) before captures run.
+
+**Headless looks different from my browser** — captures run headless
+Chromium. Use `--headed` to watch a run, and pin fonts/animations the
+same way you would for visual regression tests.
+
 ## Where to next
 
 - [Config reference](./config.md) — every field on `defineConfig`,

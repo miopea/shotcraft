@@ -19,7 +19,7 @@ through device-frame templates into shippable images for the App Store,
 Play Store, your README, and social cards.
 
 The hero above? Rendered by Shotcraft itself, against the Shotcraft
-docs site. Eat-our-own-dogfood proof — see
+companion site. Eat-our-own-dogfood proof — see
 [`examples/shotcraft-docs/`](./examples/shotcraft-docs) for the config
 that produced it.
 
@@ -59,6 +59,19 @@ the hosted companion is live at
 - **Marketplace-ready** — first-party templates ship as
   `@shotcraft/template-*` packages; community templates publish under
   `shotcraft-template-*` and auto-discover on install.
+
+## How it compares
+
+|                           | Shotcraft                     | screenshots.pro / Bannerbear / Placid |
+| ------------------------- | ----------------------------- | ------------------------------------- |
+| Source of the screenshot  | Your live app                 | You upload it manually                |
+| Login / auth flows        | Scripted with Playwright      | Out of scope — you capture first      |
+| Templates                 | Code (HTML/CSS), in your repo | Hosted editor, vendor-owned           |
+| Pricing                   | Free, MIT, self-run           | SaaS subscription + render quotas     |
+| Re-render on every change | One command in CI             | Re-upload + re-export by hand         |
+
+The wedge is the first row: every other tool starts _after_ you already
+have the screenshots. Shotcraft starts at your running app.
 
 ## First-party templates
 
@@ -149,7 +162,7 @@ shotcraft/
 │   ├── template-readme-hero/
 │   ├── template-social-og-card/
 │   ├── template-desktop-hero/
-│   └── web/                           → npm: @shotcraft/web (hosted companion site)
+│   └── web/                           → @shotcraft/web (hosted companion — deployed, not published)
 ├── examples/
 │   ├── budgetbug/                     # canonical real-world demo
 │   └── shotcraft-docs/                # eat-our-own-dogfood — produced this README's hero
@@ -193,8 +206,11 @@ landed:
 - Hosted companion (`@shotcraft/web`) — templates gallery + config
   builder + `/api/templates`, deployed to Azure App Service
 - npm publish plumbing — Changesets, GitHub Actions, provenance —
-  awaiting operator-side prereqs (`@shotcraft` scope, `NPM_TOKEN`,
-  `shotcraft.dev` domain)
+  awaiting operator-side prereqs (`@shotcraft` npm scope + `NPM_TOKEN`)
+
+Docs render natively on GitHub under [`docs/`](./docs); the interactive
+companion is live at
+[shotcraft.bfgsolutions.net](https://shotcraft.bfgsolutions.net).
 
 See [the v1 plan](./.claude/plans/shotcraft-v1.md) for the design
 decisions and [`PUBLISHING.md`](./PUBLISHING.md) for the remaining

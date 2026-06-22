@@ -38,7 +38,7 @@ export function Gallery() {
     <section className="container">
       <h1>Templates gallery</h1>
       <p className="lede">
-        Six first-party templates ship with Shotcraft. Each is its own npm package — install only
+        Seven first-party templates ship with Shotcraft. Each is its own npm package — install only
         what you need. Sample composites below were rendered by Shotcraft against the BudgetBug
         example app.
       </p>

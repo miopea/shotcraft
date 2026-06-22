@@ -47,7 +47,7 @@ screenshots/
 
 ## Subsetting
 
-Capturing through 6 templates is overkill for most iterations. Comment out
+Capturing through all 7 templates is overkill for most iterations. Comment out
 templates in `shotcraft.config.ts` while you tune copy or styling:
 
 ```ts
