@@ -11,7 +11,14 @@ export function App() {
       <header className="nav">
         <div className="nav-inner">
           <NavLink to="/" className="brand" end>
-            <span className="brand-mark" aria-hidden />
+            <img
+              className="brand-mark"
+              src="/shotcraft-icon.svg"
+              alt=""
+              aria-hidden="true"
+              width={26}
+              height={26}
+            />
             Shotcraft
           </NavLink>
           <nav>

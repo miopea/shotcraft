@@ -76,11 +76,9 @@ body {
 }
 
 .brand-mark {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--accent) 0%, #0e7490 100%);
-  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25);
+  width: 26px;
+  height: 26px;
+  display: block;
 }
 
 .nav nav {
