@@ -78,6 +78,12 @@ have the screenshots. Shotcraft starts at your running app.
 From your live app to shippable images — build a config, point it at your
 running app, capture, and render:
 
+<p align="center">
+  <img src="assets/producthunt/flow.gif" alt="Shotcraft end-to-end flow — capture your live app and render every store image" width="900">
+</p>
+
+The same four steps, broken down:
+
 ![Shotcraft end-to-end flow — config, point at your app, capture + render, ship the composite](./assets/producthunt/flow-filmstrip.png)
 
 The hosted companion ships a templates gallery, an interactive config
