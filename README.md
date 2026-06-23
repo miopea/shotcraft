@@ -207,8 +207,8 @@ PRs welcome — keep them focused, include a test, and add a
 
 ## Status
 
-🟢 **v0.1 ready to publish.** All eight phases of the v1 plan have
-landed:
+🟢 **v0.1 is shipped — live on npm.** All eight phases of the v1 plan
+have landed:
 
 - Capture engine + render engine (`shotcraft` CLI + programmatic API)
 - Seven first-party template packages, each with sample composites
@@ -217,16 +217,17 @@ landed:
 - Plain-markdown docs in [`docs/`](./docs) — rendered on GitHub
 - Hosted companion (`@shotcraft/web`) — templates gallery + config
   builder + `/api/templates`, deployed to Azure App Service
-- npm publish plumbing — Changesets, GitHub Actions, provenance —
-  awaiting operator-side prereqs (`@shotcraft` npm scope + `NPM_TOKEN`)
+- **Published to npm** — `shotcraft` plus the seven
+  `@shotcraft/template-*` packages, released via Changesets + GitHub
+  Actions with provenance
 
+Install it today: `pnpm add -D shotcraft @shotcraft/template-app-store-iphone`.
 Docs render natively on GitHub under [`docs/`](./docs); the interactive
 companion is live at
 [shotcraft.bfgsolutions.net](https://shotcraft.bfgsolutions.net).
 
-See [the v1 plan](./.claude/plans/shotcraft-v1.md) for the design
-decisions and [`PUBLISHING.md`](./PUBLISHING.md) for the remaining
-operator-side prerequisites and the Azure deployment recipes.
+See [`PUBLISHING.md`](./PUBLISHING.md) for the release + Azure deployment
+recipes.
 
 ## License
 
