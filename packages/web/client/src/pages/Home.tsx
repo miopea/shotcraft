@@ -28,11 +28,11 @@ export function Home() {
             </p>
           </div>
           <div className="feature">
-            <h3>Six first-party templates</h3>
+            <h3>Seven first-party templates</h3>
             <p>
-              App Store iPhone + iPad, Play Store phone + tablet, GitHub README hero, and Open Graph
-              / Twitter cards. Apple's, Google's, and GitHub's exact target dimensions, out of the
-              box.
+              App Store iPhone + iPad, Play Store phone + tablet, GitHub README hero, a desktop
+              browser-chrome hero, and Open Graph / Twitter cards. Apple's, Google's, and GitHub's
+              exact target dimensions, out of the box.
             </p>
           </div>
           <div className="feature">
