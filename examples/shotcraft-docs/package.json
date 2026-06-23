@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Shotcraft example — eat-our-own-dogfood. Drives the Shotcraft docs site through readme-hero + social-og-card templates to produce the README hero and OG card you see at the top of the project's GitHub repo.",
-  "homepage": "https://shotcraft.dev",
+  "homepage": "https://github.com/miopea/shotcraft",
   "repository": {
     "type": "git",
     "url": "https://github.com/miopea/shotcraft.git",

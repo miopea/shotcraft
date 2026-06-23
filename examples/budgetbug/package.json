@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Shotcraft example — drives the BudgetBug demo app (https://budgetbug.live) through all 6 first-party templates. Canonical first-real-world demo.",
-  "homepage": "https://shotcraft.dev",
+  "homepage": "https://github.com/miopea/shotcraft",
   "repository": {
     "type": "git",
     "url": "https://github.com/miopea/shotcraft.git",
