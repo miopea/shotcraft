@@ -18,7 +18,10 @@
     "format:check": "prettier --check --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.md\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
     "typecheck": "pnpm -r typecheck",
     "changeset": "changeset",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "secrets:check": "node scripts/secrets.mjs check",
+    "secrets:pull": "node scripts/secrets.mjs pull",
+    "test:secrets": "node --test scripts/secrets.test.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
