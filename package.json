@@ -21,7 +21,7 @@
     "release": "pnpm build && changeset publish",
     "secrets:check": "node scripts/secrets.mjs check",
     "secrets:pull": "node scripts/secrets.mjs pull",
-    "test:secrets": "node --test scripts/secrets.test.mjs"
+    "test:secrets": "node --test scripts/secrets.node-test.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
