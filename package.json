@@ -2,7 +2,7 @@
   "name": "shotcraft-monorepo",
   "private": true,
   "version": "0.0.0",
-  "description": "Shotcraft — capture your live app and ship App Store-ready screenshots, README hero images, and social cards in one command.",
+  "description": "Shotcraft \u2014 capture your live app and ship App Store-ready screenshots, README hero images, and social cards in one command.",
   "homepage": "https://github.com/miopea/shotcraft",
   "repository": {
     "type": "git",
@@ -18,10 +18,7 @@
     "format:check": "prettier --check --ignore-unknown --no-error-on-unmatched-pattern \"packages/**/*.{ts,tsx,md,json}\" \"docs/**/*.md\" \"examples/**/*.{ts,md}\" \"*.{md,json,yaml,yml}\"",
     "typecheck": "pnpm -r typecheck",
     "changeset": "changeset",
-    "release": "pnpm build && changeset publish",
-    "secrets:check": "node scripts/secrets.mjs check",
-    "secrets:pull": "node scripts/secrets.mjs pull",
-    "test:secrets": "node --test scripts/secrets.node-test.mjs"
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
