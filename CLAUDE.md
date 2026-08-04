@@ -19,30 +19,6 @@
 
 To use pnpm globally on the operator's machine: it's installed at `~/.npm-global/bin/pnpm` (PATH already exported in `~/.bash_aliases`). Spawned shells from npm scripts won't inherit that PATH; if `pnpm: not found` appears in a Bash tool call, prefix with `export PATH="$HOME/.npm-global/bin:$PATH"`.
 
-## Project Structure
-
-```
-shotcraft/                                  (repo root)
-├── packages/
-│   ├── core/                               → npm: shotcraft (CLI + programmatic API)
-│   │   ├── src/cli/index.ts                # subcommand dispatch
-│   │   ├── src/config/                     # defineConfig, type defs
-│   │   ├── src/capture/                    # Playwright orchestration (Phase 2)
-│   │   ├── src/render/                     # template runner (Phase 3)
-│   │   ├── src/template/types.ts           # ShotcraftTemplate contract
-│   │   └── src/index.ts                    # public exports
-│   ├── web/                                → npm: @shotcraft/web (hosted companion)
-│   │   ├── server/src/                     # Express, mirrors BudgetBug pattern
-│   │   └── client/src/                     # React + Vite
-│   └── template-*/                         → 7 first-party templates (Phase 4 + desktop-hero)
-├── examples/budgetbug/                     # reference config (Phase 5)
-├── docs/                                   # Plain markdown docs (rendered on GitHub)
-├── .changeset/                             # Changesets versioning
-├── .github/workflows/                      # ci.yml, release.yml
-├── pnpm-workspace.yaml
-└── tsconfig.base.json                      # shared strict TS config
-```
-
 ## Standard Commands
 
 ```bash
@@ -55,22 +31,6 @@ pnpm build              # tsup for core, vite + tsc for web
 pnpm test               # vitest run, all packages
 pnpm changeset          # record a version-bump intent for the next release
 ```
-
-## Tech Stack
-
-| Layer                | Choice                                            |
-| -------------------- | ------------------------------------------------- |
-| Language             | TypeScript ^5.6 strict                            |
-| Package mgr          | pnpm 11 (workspaces)                              |
-| Bundler (core)       | tsup → ESM only                                   |
-| Bundler (web client) | Vite 5                                            |
-| Runtime (web server) | Express 5 + tsx (dev) / tsc (prod)                |
-| Tests                | Vitest 2                                          |
-| Lint                 | ESLint 9 flat config + typescript-eslint          |
-| Format               | Prettier 3                                        |
-| Versioning           | Changesets                                        |
-| Capture engine       | Playwright (Chromium only for v1)                 |
-| Docs site            | Plain markdown under `docs/` (rendered on GitHub) |
 
 ## v1 Phase Status
 
@@ -155,47 +115,13 @@ Once Shotcraft v0.1.0 publishes:
 
 Until then, BudgetBug's existing scripts stay in place and continue producing iPhone + iPad captures that fed the screenshots.pro work earlier this session.
 
-## Secret Management
+## Secrets
 
-Secrets live in **1Password**, vault **`BFG`** (Schleifer Family account). Azure Key
-Vault and the old `scripts/secrets.mjs` tooling are retired.
+1Password is authoritative. Vault: `BFG`. Run `eval "$(op-login)"` at the start of any shell that touches a secret, and never print a value.
+Full standard: `rcg-architecture/docs/standards/secrets.md`.
 
-Authenticate first — `op` prompts interactively without this, which reads as a
-broken setup but is only a missing auth step:
+## Project notes
 
-```bash
-eval "$(op-login)"      # picks the right token for this repo
-op-login --check        # shows which vault this directory maps to
-```
+Architecture, structure, endpoints and conventions: `docs/project-notes.md`.
+Read it before working in an unfamiliar area of this repo.
 
-Do it at the start of every shell invocation that needs a secret; the
-environment does not persist between agent tool calls, and desktop-launched
-clients never source shell init files.
-
-```bash
-op read "op://BFG/<item>/<field>"       # quote it if the vault name has a space
-op inject -i .env.tpl -o .env               # regenerate a whole .env
-op run -- <command>                         # inject at runtime, never touching disk
-```
-
-### Rules
-
-- Never print a secret value to a terminal, log, commit, task update, or agent
-  output. Pipe directly between tools.
-- Never commit `.env` — it is a disposable local cache, not the source of truth.
-  A committed `.env.tpl` of `op://` references records which variables exist.
-- Presence checks report variable names and status only.
-- Do not create, update, or delete a 1Password item unless the operator asks.
-- A local read never means production was updated; propagation is explicit.
-
-### Verify, do not assume
-
-A dead credential fails **silently**. Check with
-`bfg-solutions/scripts/verify-credentials.mjs` (also on a daily cron). Two traps
-that produce confident wrong answers: V6's `/api/admin/*` returns `200` with a
-completely dead key via its IP allowlist — probe `/api/v1/*`. And Cloudflare
-**account-scoped** (`cfat_`) tokens verify at `/accounts/{id}/tokens/verify`,
-returning a misleading "Invalid API Token" from the user endpoint.
-
-Full design: `personal/bfg-solutions/docs/specs/secrets-architecture.md`.
-Rotation: `personal/bfg-solutions/docs/runbooks/credential-rotation.md`.
