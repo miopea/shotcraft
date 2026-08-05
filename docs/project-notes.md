@@ -49,4 +49,3 @@ shotcraft/                                  (repo root)
 | Versioning           | Changesets                                        |
 | Capture engine       | Playwright (Chromium only for v1)                 |
 | Docs site            | Plain markdown under `docs/` (rendered on GitHub) |
-
