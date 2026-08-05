@@ -122,5 +122,9 @@ Full standard: `rcg-architecture/docs/standards/secrets.md`.
 
 ## Project notes
 
-Architecture, structure, endpoints and conventions: `docs/project-notes.md`.
-Read it before working in an unfamiliar area of this repo.
+`docs/project-notes.md` — moved out of this file so it is read when
+relevant rather than every session. **Check it before deriving a repo fact by
+hand** (an `az` call, a directory walk, reading routes): if it is in here, the
+answer is already written down.
+
+Covers: Project Structure; Tech Stack.
