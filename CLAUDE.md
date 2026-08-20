@@ -7,8 +7,6 @@
 - **What this is**: open-source npm tool that captures screenshots from a running web app (via Playwright) and composites them into App Store / Play Store / README hero / social card images. The wedge: "captures from your live app" — competing tools (screenshots.pro, Bannerbear, Placid) all require manually uploaded screenshots.
 - **License**: MIT (operator: miopea)
 - **Status**: v0.1 ready — all 8 phases of the v1 plan shipped through web release 1.0.17 (front-facing Apple templates, NDJSON-streamed Discover with live phase timeline, auto-detect form auth, 7 first-party templates including desktop-hero). Plan at `.claude/plans/shotcraft-v1.md`.
-- **No `any` types** — TypeScript strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`
-- **No `ts-ignore`** — fix the type error
 - **Commit format**: conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
 - **One package = one Changeset** — every package change should add a `.changeset/*.md` describing the bump
 - **Don't push to `main` directly** until prereqs are done — operator needs to create the GitHub repo first
