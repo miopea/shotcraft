@@ -1,6 +1,6 @@
 # Shotcraft — Claude Code Project Memory
 
-> See `~/.claude/CLAUDE.md` for cross-project rules (design principles, code quality, TDD workflow, commit + ship discipline). This file covers Shotcraft-specific context only.
+> See `~/.claude/CLAUDE.md` for cross-project rules (code quality, verification, shipping vocabulary, secrets, swarm) and its routing map to `rcg-architecture/docs/standards/`. This file covers Shotcraft-specific context only.
 
 ## Quick Reference (read every session)
 
