@@ -1,5 +1,11 @@
 # @shotcraft/template-readme-hero
 
+## 1.0.3
+
+### Patch Changes
+
+- Regenerate the shipped `samples/` PNGs from the current BudgetBug demo-account capture (the committed test fixtures in `fixtures/budgetbug/`). Output dimensions are unchanged; only the app screenshot inside each composite is newer.
+
 ## 1.0.2
 
 ### Patch Changes

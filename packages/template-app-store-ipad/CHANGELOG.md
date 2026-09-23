@@ -1,5 +1,11 @@
 # @shotcraft/template-app-store-ipad
 
+## 1.1.3
+
+### Patch Changes
+
+- Regenerate the shipped `samples/` PNGs from the current BudgetBug demo-account capture (the committed test fixtures in `fixtures/budgetbug/`). Output dimensions are unchanged; only the app screenshot inside each composite is newer.
+
 ## 1.1.2
 
 ### Patch Changes
