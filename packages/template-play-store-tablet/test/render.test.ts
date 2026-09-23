@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -10,17 +9,15 @@ import template from "../src/index.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, "..");
 const SAMPLES_DIR = resolve(PACKAGE_ROOT, "samples");
+// Committed BudgetBug demo-account captures, shared by every template's
+// render test so the tests run in CI rather than only on a machine that has
+// BudgetBug checked out. See fixtures/budgetbug/README.md.
+const FIXTURES_DIR = resolve(HERE, "../../../fixtures/budgetbug");
 
 // Use the iPad raws (closer aspect to a portrait tablet than the iPhone).
 const FIXTURES = {
-  dark: resolve(
-    homedir(),
-    "projects/personal/budgetbug/fastlane/metadata/en-US/screenshots/raw/01-dashboard-ipad-13-dark.png",
-  ),
-  light: resolve(
-    homedir(),
-    "projects/personal/budgetbug/fastlane/metadata/en-US/screenshots/raw/01-dashboard-ipad-13-light.png",
-  ),
+  dark: resolve(FIXTURES_DIR, "01-dashboard-ipad-13-dark.png"),
+  light: resolve(FIXTURES_DIR, "01-dashboard-ipad-13-light.png"),
 } as const;
 
 const CAPTION = "More room to think";
@@ -55,8 +52,6 @@ async function renderSample(theme: "dark" | "light"): Promise<string> {
   return out;
 }
 
-const hasFixtures = existsSync(FIXTURES.dark) && existsSync(FIXTURES.light);
-
 describe("@shotcraft/template-play-store-tablet snapshot", () => {
   it("exports a valid ShotcraftTemplate", () => {
     expect(template.id).toBe("play-store-tablet");
@@ -66,25 +61,17 @@ describe("@shotcraft/template-play-store-tablet snapshot", () => {
     expect(existsSync(template.wrapperHtmlPath)).toBe(true);
   });
 
-  it.skipIf(!hasFixtures)(
-    "renders a 1920×1200 dark composite",
-    async () => {
-      const out = await renderSample("dark");
-      const buf = readFileSync(out);
-      expect(buf.readUInt32BE(16)).toBe(1920);
-      expect(buf.readUInt32BE(20)).toBe(1200);
-    },
-    90_000,
-  );
+  it("renders a 1920×1200 dark composite", async () => {
+    const out = await renderSample("dark");
+    const buf = readFileSync(out);
+    expect(buf.readUInt32BE(16)).toBe(1920);
+    expect(buf.readUInt32BE(20)).toBe(1200);
+  }, 90_000);
 
-  it.skipIf(!hasFixtures)(
-    "renders a 1920×1200 light composite",
-    async () => {
-      const out = await renderSample("light");
-      const buf = readFileSync(out);
-      expect(buf.readUInt32BE(16)).toBe(1920);
-      expect(buf.readUInt32BE(20)).toBe(1200);
-    },
-    90_000,
-  );
+  it("renders a 1920×1200 light composite", async () => {
+    const out = await renderSample("light");
+    const buf = readFileSync(out);
+    expect(buf.readUInt32BE(16)).toBe(1920);
+    expect(buf.readUInt32BE(20)).toBe(1200);
+  }, 90_000);
 });

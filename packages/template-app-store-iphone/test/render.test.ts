@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -10,21 +9,14 @@ import template from "../src/index.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, "..");
 const SAMPLES_DIR = resolve(PACKAGE_ROOT, "samples");
+// Committed BudgetBug demo-account captures, shared by every template's
+// render test so the tests run in CI rather than only on a machine that has
+// BudgetBug checked out. See fixtures/budgetbug/README.md.
+const FIXTURES_DIR = resolve(HERE, "../../../fixtures/budgetbug");
 
-/**
- * Prefer a real BudgetBug capture so the snapshot is visually informative.
- * Falls back to skipping if the operator hasn't checked BudgetBug out next
- * to shotcraft.
- */
 const BUDGETBUG_RAWS = {
-  dark: resolve(
-    homedir(),
-    "projects/personal/budgetbug/fastlane/metadata/en-US/screenshots/raw/01-dashboard-iphone-6.5-dark.png",
-  ),
-  light: resolve(
-    homedir(),
-    "projects/personal/budgetbug/fastlane/metadata/en-US/screenshots/raw/01-dashboard-iphone-6.5-light.png",
-  ),
+  dark: resolve(FIXTURES_DIR, "01-dashboard-iphone-6.5-dark.png"),
+  light: resolve(FIXTURES_DIR, "01-dashboard-iphone-6.5-light.png"),
 } as const;
 
 const CAPTION = "Know your budget at a glance";
@@ -62,8 +54,6 @@ async function renderSample(theme: "dark" | "light"): Promise<string> {
   return outPath;
 }
 
-const hasFixtures = existsSync(BUDGETBUG_RAWS.dark) && existsSync(BUDGETBUG_RAWS.light);
-
 describe("@shotcraft/template-app-store-iphone snapshot", () => {
   it("exports a valid ShotcraftTemplate", () => {
     expect(template.id).toBe("app-store-iphone");
@@ -73,25 +63,17 @@ describe("@shotcraft/template-app-store-iphone snapshot", () => {
     expect(existsSync(template.wrapperHtmlPath)).toBe(true);
   });
 
-  it.skipIf(!hasFixtures)(
-    "renders a 1284×2778 dark composite from a BudgetBug capture",
-    async () => {
-      const out = await renderSample("dark");
-      const buf = readFileSync(out);
-      expect(buf.readUInt32BE(16)).toBe(1284);
-      expect(buf.readUInt32BE(20)).toBe(2778);
-    },
-    90_000,
-  );
+  it("renders a 1284×2778 dark composite from a BudgetBug capture", async () => {
+    const out = await renderSample("dark");
+    const buf = readFileSync(out);
+    expect(buf.readUInt32BE(16)).toBe(1284);
+    expect(buf.readUInt32BE(20)).toBe(2778);
+  }, 90_000);
 
-  it.skipIf(!hasFixtures)(
-    "renders a 1284×2778 light composite from a BudgetBug capture",
-    async () => {
-      const out = await renderSample("light");
-      const buf = readFileSync(out);
-      expect(buf.readUInt32BE(16)).toBe(1284);
-      expect(buf.readUInt32BE(20)).toBe(2778);
-    },
-    90_000,
-  );
+  it("renders a 1284×2778 light composite from a BudgetBug capture", async () => {
+    const out = await renderSample("light");
+    const buf = readFileSync(out);
+    expect(buf.readUInt32BE(16)).toBe(1284);
+    expect(buf.readUInt32BE(20)).toBe(2778);
+  }, 90_000);
 });
