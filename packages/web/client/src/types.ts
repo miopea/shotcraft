@@ -28,6 +28,8 @@ export interface HealthResponse {
   status: string;
   liveDemoEnabled: boolean;
   version: string;
+  /** Commit SHA stamped into the deployed build; null when unstamped (local dev). */
+  build: string | null;
   /** True when the server was launched via `shotcraft web` with a config file in cwd. */
   localMode?: boolean;
   /** Absolute path of the bound shotcraft.config.json (only when localMode=true). */

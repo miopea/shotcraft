@@ -23,6 +23,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import express from "express";
+import { buildSha } from "./buildInfo.js";
 import { templatesRouter } from "./routes/templates.js";
 import { renderDemoRouter } from "./routes/render-demo.js";
 import { captureRouter } from "./routes/capture.js";
@@ -71,6 +72,9 @@ app.get("/api/health", (_req, res) => {
     status: "ok",
     liveDemoEnabled: LIVE_DEMO_ENABLED,
     version: "0.0.0",
+    // The commit this bundle was built from, or null when unstamped (local
+    // dev). Stamped into the artifact at build time — see buildInfo.ts.
+    build: buildSha(),
     ...(LOCAL_MODE ? { localMode: true, configPath: LOCAL_CONFIG_PATH } : {}),
   });
 });

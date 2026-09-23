@@ -43,6 +43,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Build @shotcraft/web
+        # BUILD_SHA is stamped into server/dist/build-info.json and served by
+        # /api/health as `build`. Baked into the bundle rather than set as an
+        # app setting: writing a setting restarts the app, so the OLD package
+        # would come back up reporting the NEW SHA.
+        env:
+          BUILD_SHA: ${{ github.sha }}
         run: pnpm --filter @shotcraft/web build
       - name: Stage deploy bundle
         # App Service can't consume the pnpm workspace directly. Stage a
