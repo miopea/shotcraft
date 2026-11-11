@@ -33,7 +33,12 @@ concurrency:
 jobs:
   deploy-web:
     name: Deploy @shotcraft/web → App Service
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest (now Ubuntu 26.04). The Chromium shipped to
+    # App Service is the build Playwright picks for THIS runner's OS, and the
+    # last good deploy (run 35847178964) shipped the ubuntu-24.04 build.
+    # Pinning keeps the same build instead of whatever the newest Playwright
+    # picks for 26.04 — or refuses, as the lockfile's 1.59.1 does in ci.yml.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

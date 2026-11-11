@@ -7,7 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that moved to Ubuntu 26.04, and the
+    # lockfile's Playwright (1.59.1) refuses it ("Playwright does not support
+    # chromium on ubuntu26.04-x64"), so the job died before any test ran.
+    # Unpin once the lockfile's Playwright supports the newer image.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
