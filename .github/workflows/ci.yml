@@ -38,3 +38,9 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
+        # INJECTED FAILURE (temporary, reverted in the next commit): point
+        # Playwright at an empty browser dir so every test that launches
+        # Chromium must fail. Proves the suite gates on the browser rather
+        # than skipping when it is missing.
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /tmp/injected-no-browsers
