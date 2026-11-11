@@ -27,7 +27,8 @@ export interface TemplatesResponse {
 export interface HealthResponse {
   status: string;
   liveDemoEnabled: boolean;
-  version: string;
+  /** `@shotcraft/web` version stamped into the deployed build; null when unstamped (local dev). */
+  version: string | null;
   /** Commit SHA stamped into the deployed build; null when unstamped (local dev). */
   build: string | null;
   /** True when the server was launched via `shotcraft web` with a config file in cwd. */

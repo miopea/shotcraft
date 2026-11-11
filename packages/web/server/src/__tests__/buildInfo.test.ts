@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildSha, readBuildSha } from "../buildInfo.js";
+import { buildSha, buildVersion, readBuildSha, readBuildVersion } from "../buildInfo.js";
 
 describe("buildSha", () => {
   it("reads null from the source tree, which carries no stamp", () => {
@@ -48,5 +48,42 @@ describe("readBuildSha", () => {
   it("returns null for malformed JSON or a non-string sha", () => {
     expect(readBuildSha(fixture("{not json"))).toBeNull();
     expect(readBuildSha(fixture(JSON.stringify({ sha: 42 })))).toBeNull();
+  });
+});
+
+describe("buildVersion", () => {
+  it("reads null from the source tree, which carries no stamp", () => {
+    expect(buildVersion()).toBeNull();
+  });
+});
+
+describe("readBuildVersion", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    dirs.length = 0;
+  });
+
+  function fixture(contents: string | null): string {
+    const dir = mkdtempSync(join(tmpdir(), "shotcraft-build-info-"));
+    dirs.push(dir);
+    if (contents !== null) writeFileSync(join(dir, "build-info.json"), contents);
+    return dir;
+  }
+
+  it("returns the stamped version", () => {
+    expect(readBuildVersion(fixture(JSON.stringify({ sha: null, version: "1.2.1" })))).toBe(
+      "1.2.1",
+    );
+  });
+
+  it("returns null when the file is absent or predates the version stamp", () => {
+    expect(readBuildVersion(fixture(null))).toBeNull();
+    expect(readBuildVersion(fixture(JSON.stringify({ sha: "abc" })))).toBeNull();
+  });
+
+  it("returns null for an empty or non-string version", () => {
+    expect(readBuildVersion(fixture(JSON.stringify({ version: "" })))).toBeNull();
+    expect(readBuildVersion(fixture(JSON.stringify({ version: 1 })))).toBeNull();
   });
 });
