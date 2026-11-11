@@ -57,12 +57,12 @@ All implemented as `shotcraft <subcommand>` from `packages/core/src/cli/index.ts
 | `shotcraft render [id]` | 3            | Runs only render; optionally for one template                             |
 | `shotcraft dev`         | (TBD)        | Hot-reload preview for template authors                                   |
 | `shotcraft web`         | 8            | Launches `@shotcraft/web` locally with `SHOTCRAFT_LIVE_DEMO=1`            |
-| `shotcraft list`        | 4            | Prints discovered templates from package.json deps                        |
+| `shotcraft list`        | (TBD)        | Prints discovered templates from package.json deps                        |
 | `shotcraft doctor`      | 2            | Sanity-checks config (target reachable, login works, templates installed) |
 
 ## Template Package Contract
 
-Every Shotcraft template package — first-party (`@shotcraft/template-*`) or community (`shotcraft-template-*`) — exports a default that satisfies `ShotcraftTemplate` from `shotcraft`:
+Every Shotcraft template package — first-party (`@shotcraft/template-*`) or community (`shotcraft-template-*` / `@scope/shotcraft-template-*`) — exports a default that satisfies `ShotcraftTemplate` from `shotcraft`:
 
 ```ts
 import type { ShotcraftTemplate } from "shotcraft";
@@ -78,7 +78,7 @@ const template: ShotcraftTemplate = {
 export default template;
 ```
 
-Discovery (Phase 4): the core engine scans the consumer project's `package.json` dependencies for any package matching `@shotcraft/template-*` or `shotcraft-template-*`, dynamically imports each, and registers the default export.
+Discovery: `shotcraft doctor` scans the consumer project's `package.json` dependencies for `@shotcraft/template-*`, `shotcraft-template-*` and `@scope/shotcraft-template-*` and **lists** them. Nothing is imported or registered by being installed — only packages named in the config's `templates` are loaded and rendered.
 
 ## Auth Model in User Configs
 

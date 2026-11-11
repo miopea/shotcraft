@@ -70,8 +70,10 @@ Sanity-checks the setup before you run the full pipeline:
   blockers)
 - Reports the real capture-spec count
 - Probes the `target` URL with a 5-second timeout
-- Discovers installed `@shotcraft/template-*` and
-  `shotcraft-template-*` packages from `package.json`
+- Lists installed `@shotcraft/template-*`, `shotcraft-template-*` and
+  `@your-scope/shotcraft-template-*` packages from `package.json`. This
+  is a report only: a template renders when it is listed in the
+  config's `templates`, not because it is installed
 
 Exits non-zero on any blocker problem (config missing or invalid,
 target unreachable). Exits zero with warnings if templates aren't

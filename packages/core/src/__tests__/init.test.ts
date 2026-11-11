@@ -26,6 +26,13 @@ describe("runInit", () => {
     expect(written).toContain("export default defineConfig({");
   });
 
+  it("says a template must be listed, not just installed, before anything renders", () => {
+    // The scaffold ships `templates` commented out, so the quick start
+    // renders nothing until the user lists them. The scaffold has to say so.
+    expect(INIT_TEMPLATE).toMatch(/Until you uncomment this, `shotcraft` writes raw captures only/);
+    expect(INIT_TEMPLATE).toMatch(/Installing a template package is not enough/);
+  });
+
   it("refuses to overwrite an existing config without force", async () => {
     await runInit({ cwd: dir });
     const second = await runInit({ cwd: dir });

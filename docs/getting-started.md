@@ -39,7 +39,11 @@ pnpm shotcraft init
 ```
 
 This writes `shotcraft.config.ts` next to your `package.json`. Open it —
-the scaffold has comments pointing at the spots you need to edit.
+the scaffold has comments pointing at the spots you need to edit. Two of
+them matter before the first run: point `target` at your running app,
+and uncomment `templates` with the packages you installed. Installing a
+template doesn't enable it; with no templates listed, `shotcraft` writes
+raw captures only.
 
 ```ts
 import { defineConfig } from "shotcraft";

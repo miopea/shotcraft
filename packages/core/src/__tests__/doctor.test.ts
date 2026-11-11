@@ -73,4 +73,39 @@ describe("runDoctor", () => {
     expect(report.ok).toBe(true);
     expect(report.warnings).toHaveLength(0);
   });
+
+  it("discovers scoped community templates (@scope/shotcraft-template-*)", async () => {
+    await writeFile(
+      join(dir, "shotcraft.config.js"),
+      `export default {
+        target: "http://localhost:5173",
+        screens: [{ route: "/", name: "home", caption: "Hi" }],
+      };`,
+    );
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "demo",
+        version: "0.0.0",
+        devDependencies: {
+          "@shotcraft/template-app-store-iphone": "*",
+          "@acme/shotcraft-template-brand": "*",
+          "shotcraft-template-community-vibes": "*",
+          // Near misses — the prefix must start the (unscoped) name.
+          "@acme/not-a-shotcraft-template-x": "*",
+          "my-shotcraft-template-y": "*",
+        },
+      }),
+    );
+    const lines: string[] = [];
+    const report = await runDoctor({
+      cwd: dir,
+      skipTarget: true,
+      onLog: (msg) => lines.push(msg),
+    });
+    expect(report.ok).toBe(true);
+    expect(lines).toContain("✓ templates: 3 discovered");
+    expect(lines).toContain("    – @acme/shotcraft-template-brand");
+    expect(lines.join("\n")).not.toMatch(/not-a-shotcraft-template-x|my-shotcraft-template-y/);
+  });
 });

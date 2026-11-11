@@ -28,7 +28,10 @@ Naming convention:
   Shotcraft maintainers' published packages)
 - **Community**: `shotcraft-template-{id}` or `@your-scope/shotcraft-template-{id}`
 
-Both are auto-discovered by `shotcraft doctor`.
+`shotcraft doctor` lists every installed package matching either
+pattern. Listing is all it does: a consumer still adds your package to
+`templates` in their config before it renders anything (see
+[Publishing](#publishing)).
 
 ## The default export
 

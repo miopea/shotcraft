@@ -25,8 +25,7 @@ import { runWebCommand } from "./commands/web.js";
 import { run } from "../run.js";
 import { loadConfig } from "../config/load.js";
 import { dirname } from "node:path";
-
-const VERSION = "0.0.0";
+import { readOwnVersion } from "./version.js";
 
 const HELP = `
 shotcraft — capture your live app, ship every screenshot you need
@@ -113,7 +112,7 @@ function notImplemented(name: string): never {
 
 async function dispatch(args: ParsedArgs): Promise<void> {
   if (args.flags.version) {
-    process.stdout.write(`${VERSION}\n`);
+    process.stdout.write(`${readOwnVersion()}\n`);
     return;
   }
   if (args.flags.help || args.subcommand === "help") {
@@ -136,7 +135,9 @@ async function dispatch(args: ParsedArgs): Promise<void> {
       const result = await runInit({ force: args.flags.force });
       if (result.written) {
         process.stdout.write(
-          `Wrote ${result.path}\nNext: edit it and run \`shotcraft capture\`.\n`,
+          `Wrote ${result.path}\n` +
+            `Next: set \`target\` to your running app and list your templates under \`templates\`,\n` +
+            `then run \`shotcraft\`. With no templates listed it writes raw captures only.\n`,
         );
       } else {
         process.stderr.write(

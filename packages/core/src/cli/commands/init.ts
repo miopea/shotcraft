@@ -23,6 +23,7 @@ const TEMPLATE = `import { defineConfig } from "shotcraft";
  * Docs: https://github.com/miopea/shotcraft/tree/main/docs
  */
 export default defineConfig({
+  // Your running app. Change this to your dev server or staging URL.
   target: "http://localhost:5173",
 
   /**
@@ -86,9 +87,12 @@ export default defineConfig({
   ],
 
   /**
-   * Templates compose your captures into final marketing images. Install
-   * what you need and reference them here. \`shotcraft capture\` runs
-   * fine without any.
+   * Templates compose your captures into final marketing images.
+   *
+   * Until you uncomment this, \`shotcraft\` writes raw captures only.
+   * Installing a template package is not enough: list every one you want
+   * rendered. \`shotcraft doctor\` prints the template packages it finds in
+   * your package.json.
    */
   // templates: [
   //   "@shotcraft/template-app-store-iphone",

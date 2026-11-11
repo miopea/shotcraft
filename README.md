@@ -30,10 +30,13 @@ pnpm add -D shotcraft \
   @shotcraft/template-app-store-iphone \
   @shotcraft/template-readme-hero
 pnpm shotcraft init       # scaffold shotcraft.config.ts
+# edit shotcraft.config.ts: set `target`, uncomment `templates`
 pnpm shotcraft doctor     # sanity-check the config
 pnpm shotcraft            # capture + render end-to-end
 ```
 
+Installing a template doesn't enable it: list each one under `templates`
+in the config. With none listed, `shotcraft` writes raw captures only.
 PNGs land in `screenshots/{template-id}/{name}-{theme}.png`, ready to
 upload to App Store Connect, drop into your README, or post on Twitter.
 
@@ -58,7 +61,8 @@ the hosted companion is live at
   can script.
 - **Marketplace-ready** — first-party templates ship as
   `@shotcraft/template-*` packages; community templates publish under
-  `shotcraft-template-*` and auto-discover on install.
+  `shotcraft-template-*` or `@your-scope/shotcraft-template-*`, and work
+  the same way once listed in your config.
 
 ## How it compares
 
@@ -204,8 +208,9 @@ pnpm changeset              # record a version-bump intent
 Templates are the place where Shotcraft most directly benefits from
 contributions. The package contract is small — see
 [Build your own template](./docs/contributing-templates.md) for the
-walkthrough. Community templates publish under `shotcraft-template-*`;
-they auto-discover on install via `shotcraft doctor`.
+walkthrough. Community templates publish under `shotcraft-template-*` or
+`@your-scope/shotcraft-template-*`. `shotcraft doctor` lists the ones a
+project has installed; the project adds each to `templates` to render it.
 
 For bug reports and feature requests, please open an issue on GitHub.
 PRs welcome — keep them focused, include a test, and add a

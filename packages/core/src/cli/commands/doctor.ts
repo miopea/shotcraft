@@ -23,7 +23,13 @@ export interface DoctorReport {
   warnings: string[];
 }
 
-const TEMPLATE_PATTERN = /^(?:@shotcraft\/template-|shotcraft-template-)/;
+/**
+ * First-party `@shotcraft/template-*`, plus community `shotcraft-template-*`
+ * published either unscoped or under the author's own scope
+ * (`@your-scope/shotcraft-template-*`) — the names docs/contributing-templates.md
+ * promises are detected.
+ */
+const TEMPLATE_PATTERN = /^(?:@shotcraft\/template-|(?:@[^/]+\/)?shotcraft-template-)/;
 
 /**
  * Sanity-check a Shotcraft setup. Returns a structured report and emits
