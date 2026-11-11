@@ -41,7 +41,7 @@
     "dev": "tsup --watch"
   },
   "peerDependencies": {
-    "shotcraft": "workspace:*"
+    "shotcraft": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
