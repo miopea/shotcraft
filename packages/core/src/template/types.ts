@@ -1,15 +1,15 @@
 /**
  * The contract every Shotcraft template package implements. Templates are
  * regular npm packages whose default export matches this shape — first-party
- * templates live under `@shotcraft/template-*`, and any community package can
- * be discovered from `package.json` dependencies whose name matches
- * `shotcraft-template-*`.
+ * templates live under `@shotcraft/template-*`, and community packages publish
+ * as `shotcraft-template-*` or `@your-scope/shotcraft-template-*`. A template
+ * renders once its package is listed in the config's `templates`.
  */
 export interface ShotcraftTemplate {
   /**
    * Stable identifier for this template, used in output paths and CLI commands.
    * Must be globally unique — convention is to mirror the npm package name
-   * minus the `@shotcraft/template-` or `shotcraft-template-` prefix.
+   * minus the `@shotcraft/template-` or `[@scope/]shotcraft-template-` prefix.
    *
    * Example: `app-store-iphone`, `readme-hero`, `social-og-card`.
    */
