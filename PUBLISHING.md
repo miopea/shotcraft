@@ -225,26 +225,43 @@ standard semver bump.
 
 ### Provenance
 
-The `release.yml` workflow has `id-token: write` permission, which is
-the OIDC trust signal `npm publish --provenance` needs. To opt
-packages into provenance, add to each package's `package.json`:
+**No version published so far carries an npm provenance attestation**,
+up to and including `shotcraft` 0.1.3 and its templates.
+`changeset publish` publishes with `pnpm publish`, and pnpm ignores
+`publishConfig.provenance` in `package.json` (only npm's own CLI reads
+it). pnpm turns provenance on in just two cases:
 
-```json
-{
-  "publishConfig": {
-    "provenance": true,
-    "access": "public"
-  }
-}
+- its own config sets it
+- a trusted-publishing (OIDC) exchange succeeds
+
+Every release so far used the token, and no config set it.
+
+`release.yml` therefore sets `PNPM_CONFIG_PROVENANCE: "true"` on the
+changesets step. With the job's `id-token: write` permission, pnpm
+signs a provenance statement through Sigstore using the job's GitHub
+OIDC token. This works whether npm auth is the token or trusted
+publishing. `NPM_CONFIG_PROVENANCE` does not work, because pnpm 11
+ignores it. **This is unproven until a release runs with it.** Check
+each published version:
+
+```bash
+npm view shotcraft@<version> dist.attestations.provenance.predicateType
+# expect: https://slsa.dev/provenance/v1
 ```
 
-`access: public` is also required for `@shotcraft/*` scoped packages —
-without it, npm defaults to `restricted` (private) for scoped
-packages, and the publish fails.
+`npm audit signatures`, run in a project that installs the packages,
+should then count them under "verified attestations".
 
 All eight publishable packages (`shotcraft` + the seven
-`@shotcraft/template-*`) ship `publishConfig: { access: "public", provenance: true }`.
-`@shotcraft/web` is `private: true` — it is deployed, not published to npm.
+`@shotcraft/template-*`) still ship
+`publishConfig: { access: "public", provenance: true }`:
+
+- `access: public` is required for the `@shotcraft/*` scoped packages.
+  Without it npm defaults scoped packages to `restricted` (private), and
+  the publish fails.
+- `provenance: true` only matters if someone publishes with `npm publish`.
+
+`@shotcraft/web` is `private: true`. It is deployed, not published to npm.
 
 ## Azure deployment (current)
 
