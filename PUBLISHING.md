@@ -33,10 +33,24 @@ git push -u origin main
 
 The repo has commits queued for v0.1; the first push lands all of them.
 
-### 3. Wire up the npm token
+### 3. Wire up npm publish credentials
 
-Generate a granular automation token at npmjs.com (Account → Access
-Tokens → Generate New Token → Granular):
+`release.yml` publishes through `changeset publish`, which runs
+`pnpm publish` for each package. pnpm tries npm **trusted publishing**
+(OIDC) first. If that fails, for example because no trusted publisher
+is configured for the package, it falls back to the `NPM_TOKEN` Actions
+secret. As of 0.1.3 (November 2026), none of the eight packages has a
+trusted publisher, so releases publish with the token.
+
+**Deadline:** npm removes direct publishing with granular access
+tokens in **January 2027**
+([about access tokens](https://docs.npmjs.com/about-access-tokens)).
+The first release after that needs trusted publishing (3b).
+
+#### 3a. npm token (current)
+
+Generate a granular token at npmjs.com (Account → Access Tokens →
+Generate New Token → Granular):
 
 - **Name**: `shotcraft-ci`
 - **Expiration**: 90 days (rotate on a calendar reminder)
@@ -46,14 +60,66 @@ Tokens → Generate New Token → Granular):
 - **Allowed organization**: leave blank for personal account
 - **Allowed IP ranges**: leave blank or restrict to GitHub Actions IPs
 
-Then add it to the repo as a secret:
+Save it in 1Password (vault `BFG`), because GitHub never shows a secret
+again. Then add it to the repo:
 
 ```bash
-gh secret set NPM_TOKEN
-# paste the token when prompted
+gh secret set NPM_TOKEN --repo miopea/shotcraft
+# paste the token when prompted, so it never lands in shell history
 ```
 
-The `release.yml` workflow already references `secrets.NPM_TOKEN`.
+A dead or expired token makes every package fail with
+`E404 Not Found - PUT https://registry.npmjs.org/<pkg>`. npm returns
+404, not 401, for a rejected publish credential.
+
+#### 3b. Move to trusted publishing
+
+Do this **right before a release**. A new trusted-publisher config
+expires if its first successful publish doesn't happen within 2 days
+([trusted publishers](https://docs.npmjs.com/trusted-publishers)).
+
+1. **Turn on two-factor authentication** for the npm account that owns
+   the packages. `npm trust` refuses to run without account-level 2FA
+   ([npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust)).
+   The npmjs.com alternative (each package → Settings → Trusted
+   publishing, with the same fields) doesn't document that requirement.
+2. With npm 11.15.0 or later, logged in interactively (a token with
+   "Bypass 2FA" doesn't work for `npm trust`), register the workflow
+   for all eight packages:
+
+   ```bash
+   for p in shotcraft \
+     @shotcraft/template-app-store-iphone @shotcraft/template-app-store-ipad \
+     @shotcraft/template-play-store-phone @shotcraft/template-play-store-tablet \
+     @shotcraft/template-readme-hero @shotcraft/template-social-og-card \
+     @shotcraft/template-desktop-hero; do
+     npm trust github "$p" --file release.yml --repo miopea/shotcraft --allow-publish -y
+   done
+   npm trust list shotcraft
+   ```
+
+   `--allow-publish` is required. `changeset publish` publishes
+   directly, not through `npm stage`. Each package's
+   `repository.url` must stay `https://github.com/miopea/shotcraft.git`.
+
+3. **Dispatch `release.yml`**, then check which path published:
+
+   ```bash
+   npm view shotcraft@<version> _npmUser
+   ```
+
+   `GitHub Actions` means trusted publishing worked. The token
+   account's name means pnpm fell back to `NPM_TOKEN`. Don't grep the
+   run log for pnpm's `Skipped OIDC` warning, because
+   `changeset publish` runs `pnpm publish --json`, which never prints
+   it.
+
+4. Once all eight packages show `GitHub Actions`:
+   - remove `NPM_TOKEN` from `release.yml`
+   - delete the secret
+   - revoke the token on npmjs.com
+   - optionally set each package's publishing access to "Require
+     two-factor authentication and disallow tokens"
 
 ### 4. Buy `shotcraft.dev`
 
