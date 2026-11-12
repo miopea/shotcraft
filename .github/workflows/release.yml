@@ -41,3 +41,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # pnpm ignores `publishConfig.provenance` in package.json and
+          # `NPM_CONFIG_PROVENANCE`; only its own config turns provenance
+          # on. Signing uses this job's OIDC token (`id-token: write`).
+          PNPM_CONFIG_PROVENANCE: "true"

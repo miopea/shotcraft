@@ -230,7 +230,7 @@ have landed:
   builder + `/api/templates`, deployed to Azure App Service
 - **Published to npm** — `shotcraft` plus the seven
   `@shotcraft/template-*` packages, released via Changesets + GitHub
-  Actions with provenance
+  Actions
 
 Install it today: `pnpm add -D shotcraft @shotcraft/template-app-store-iphone`.
 Docs render natively on GitHub under [`docs/`](./docs); the interactive
