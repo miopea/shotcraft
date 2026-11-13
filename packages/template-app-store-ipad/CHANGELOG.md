@@ -1,5 +1,13 @@
 # @shotcraft/template-app-store-ipad
 
+## 1.1.5
+
+### Patch Changes
+
+- Republished with npm provenance attestations. No code changes.
+- Updated dependencies
+  - shotcraft@0.1.4
+
 ## 1.1.4
 
 ### Patch Changes

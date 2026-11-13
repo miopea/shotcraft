@@ -1,5 +1,13 @@
 # @shotcraft/template-play-store-phone
 
+## 1.0.5
+
+### Patch Changes
+
+- Republished with npm provenance attestations. No code changes.
+- Updated dependencies
+  - shotcraft@0.1.4
+
 ## 1.0.4
 
 ### Patch Changes

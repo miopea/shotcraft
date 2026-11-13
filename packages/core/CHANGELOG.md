@@ -1,5 +1,11 @@
 # shotcraft
 
+## 0.1.4
+
+### Patch Changes
+
+- Republished with npm provenance attestations. No code changes.
+
 ## 0.1.3
 
 ### Patch Changes
