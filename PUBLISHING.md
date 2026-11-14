@@ -225,8 +225,10 @@ standard semver bump.
 
 ### Provenance
 
-**No version published so far carries an npm provenance attestation**,
-up to and including `shotcraft` 0.1.3 and its templates.
+**Every version from `shotcraft` 0.1.4 on carries an npm provenance
+attestation**, and so does every template version released with it
+(1.1.5 / 1.0.5). Versions up to and including 0.1.3 have none.
+
 `changeset publish` publishes with `pnpm publish`, and pnpm ignores
 `publishConfig.provenance` in `package.json` (only npm's own CLI reads
 it). pnpm turns provenance on in just two cases:
@@ -234,15 +236,20 @@ it). pnpm turns provenance on in just two cases:
 - its own config sets it
 - a trusted-publishing (OIDC) exchange succeeds
 
-Every release so far used the token, and no config set it.
+Releases through 0.1.3 used the token, and no config set it.
 
 `release.yml` therefore sets `PNPM_CONFIG_PROVENANCE: "true"` on the
 changesets step. With the job's `id-token: write` permission, pnpm
 signs a provenance statement through Sigstore using the job's GitHub
-OIDC token. This works whether npm auth is the token or trusted
-publishing. `NPM_CONFIG_PROVENANCE` does not work, because pnpm 11
-ignores it. **This is unproven until a release runs with it.** Check
-each published version:
+OIDC token. `NPM_CONFIG_PROVENANCE` does not work, because pnpm 11
+ignores it.
+
+The 0.1.4 release (run 43493578099, 2026-11-13) proved this on the
+token route: all eight packages carry the attestation, and
+`npm audit signatures` counts them as verified. It should work the same
+under trusted publishing, but no release has published that way yet
+(see [3b](#3b-move-to-trusted-publishing)). Check each published
+version:
 
 ```bash
 npm view shotcraft@<version> dist.attestations.provenance.predicateType
@@ -250,7 +257,9 @@ npm view shotcraft@<version> dist.attestations.provenance.predicateType
 ```
 
 `npm audit signatures`, run in a project that installs the packages,
-should then count them under "verified attestations".
+counts them under "verified attestations". For a few minutes after a
+publish, both checks can return 404 while the registry catches up, so
+wait and re-run before treating that as a missing attestation.
 
 All eight publishable packages (`shotcraft` + the seven
 `@shotcraft/template-*`) still ship
