@@ -42,7 +42,7 @@ Tracked in `.claude/plans/shotcraft-v1.md`. Brief:
 | 4     | ✅ Done | Templates 2-7: app-store-ipad, play-store-phone, play-store-tablet, readme-hero, social-og-card, desktop-hero                                                                                 |
 | 5     | ✅ Done | `examples/budgetbug/shotcraft.config.ts` driving the real BudgetBug capture set end-to-end                                                                                                    |
 | 6     | ✅ Done | Plain-markdown docs under `docs/` (rendered on GitHub) — Astro Starlight scrapped in favor of native rendering                                                                                |
-| 7     | ✅ Done | npm publish plumbing — Changesets + GitHub Actions (no provenance yet; see PUBLISHING.md) — awaiting operator-side `@shotcraft` scope registration                                            |
+| 7     | ✅ Done | npm publish plumbing — Changesets + GitHub Actions (provenance from 0.1.4; see PUBLISHING.md) — awaiting operator-side `@shotcraft` scope registration                                        |
 | 8     | ✅ Done | Hosted companion (`@shotcraft/web`) live at shotcraft.bfgsolutions.net — templates gallery, config builder, Crawler, NDJSON-streamed Discover with live phase timeline, auto-detect form auth |
 
 ## CLI Subcommand Surface
