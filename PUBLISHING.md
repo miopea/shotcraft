@@ -140,8 +140,8 @@ clean. CI uses `--frozen-lockfile`; a drifted lockfile fails the build.
 
 ## Releasing
 
-The release workflow is fully automated once the prerequisites are in
-place.
+Once the prerequisites are in place, a release is one manual step:
+dispatching `release.yml`. The workflow does the rest.
 
 ### Adding a Changeset
 
@@ -166,8 +166,11 @@ Brief explanation of what changed and why.
 
 ### How a release ships
 
-1. **PR merges to `main`** carrying queued Changeset files.
-2. **`release.yml` runs** on every push to `main`. The
+1. **PR merges to `main`** carrying queued Changeset files. Nothing
+   publishes yet. `release.yml` is `workflow_dispatch` only, so a push
+   to `main` never runs it.
+2. **Dispatch `release.yml`** from the Actions tab (Release → Run
+   workflow) or with `gh workflow run release.yml`. The
    `changesets/action@v1` step:
    - If unreleased Changesets exist: opens (or updates) a PR titled
      "release: version packages" that bumps versions, deletes the
@@ -176,9 +179,13 @@ Brief explanation of what changed and why.
    - Otherwise, runs `pnpm release` (which invokes
      `changeset publish`) — actually publishing the bumped versions
      to npm, creating GitHub Releases, and tagging the commit.
-3. **Maintainer reviews** the "release: version packages" PR. Merging
-   it triggers another `release.yml` run, which finds no unreleased
-   Changesets and proceeds to publish.
+3. **Maintainer reviews and merges** the "release: version packages"
+   PR. Merging it doesn't publish. **Dispatch `release.yml` again**.
+   This run finds no unreleased Changesets, so it publishes.
+
+You can skip the version PR. Run `pnpm changeset version` locally,
+commit its output in an ordinary PR, and merge that. One dispatch then
+publishes. Releases 0.1.3 and 0.1.4 shipped this way.
 
 ### Dry-run a publish locally
 
