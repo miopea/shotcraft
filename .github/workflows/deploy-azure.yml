@@ -131,3 +131,11 @@ jobs:
         with:
           app-name: shotcraft-web
           package: ${{ env.DEPLOY_DIR }}
+
+      - name: Prune Playwright builds this deploy didn't ship
+        # The deploy adds files to wwwroot but never removes any, so each
+        # Playwright upgrade left another ~700 MB browser set on the plan's
+        # shared 10 GiB /home (4.8 GB by 2026-11-17). This deletes only the
+        # ms-playwright/<name>-<revision> entries the bundle above didn't
+        # ship. The script lists its guards.
+        run: bash .github/scripts/prune-playwright-builds.sh shotcraft-web "$DEPLOY_DIR/ms-playwright"
